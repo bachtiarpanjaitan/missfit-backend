@@ -22,8 +22,8 @@ func (r *M20260409082702UserQuizAnswer) Up() error {
 			table.Uuid("selected_option_id")
 			table.Boolean("is_correct").Default(false)
 			table.Integer("points_earned").Default(0)
-			table.Timestamp("created_at")
-			table.Timestamp("updated_at").Nullable()
+			table.Timestamps()
+			table.SoftDeletes()
 
 			table.Primary("id")
 			table.Index("user_quiz_attempt_id")

@@ -19,9 +19,9 @@ func (r *M20260408063501QuizPackage) Up() error {
 		err := facades.Schema().Create("quiz_packages", func(table schema.Blueprint) {
 			table.Uuid("id")
 			table.String("title")
-			table.Text("description")
-			table.String("category")
-			table.String("difficulty_level")
+			table.Text("description").Nullable()
+			table.String("category").Nullable()
+			table.String("difficulty_level").Nullable()
 			table.Text("thumbnail_url").Nullable()
 			table.Boolean("is_free").Default(false)
 			table.Decimal("price").Default(0)
@@ -34,14 +34,11 @@ func (r *M20260408063501QuizPackage) Up() error {
 			table.Decimal("average_score").Default(0)
 			table.Boolean("is_published").Default(false)
 			table.Timestamp("published_at").Nullable()
-			table.Uuid("created_by").Nullable()
-			table.Timestamp("created_at")
-			table.Timestamp("updated_at").Nullable()
-			table.Timestamp("deleted_at").Nullable()
+			table.Timestamps()
+			table.SoftDeletes()
 
 			table.Primary("id")
-			table.Foreign("created_by").References("id").On("users")
-			table.Index("category", "difficulty_level")
+			table.Index("category")
 
 		})
 		if err != nil {

@@ -23,7 +23,8 @@ func (r *M20260409083557UserBadge) Up() error {
 			table.String("badge_icon_url").Nullable()
 			table.Text("description").Nullable()
 			table.Timestamp("earned_at").Nullable()
-			table.Timestamp("created_at")
+			table.Timestamps()
+			table.SoftDeletes()
 
 			table.Primary("id")
 			table.Index("user_id")

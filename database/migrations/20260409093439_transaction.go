@@ -31,8 +31,8 @@ func (r *M20260409093439Transaction) Up() error {
 			table.Jsonb("metadata").Nullable()
 			table.String("receipt_url").Nullable()
 			table.Text("notes").Nullable()
-			table.Timestamp("created_at")
-			table.Timestamp("updated_at")
+			table.Timestamps()
+			table.SoftDeletes()
 
 			table.Primary("id")
 			table.Index("user_id")

@@ -28,8 +28,8 @@ func (r *M20260409083111UserQuizAttempts) Up() error {
 			table.Boolean("is_passed").Nullable()
 			table.Integer("time_taken_seconds").Default(0)
 			table.String("status", 20)
-			table.Timestamp("created_at")
-			table.Timestamp("updated_at").Nullable()
+			table.Timestamps()
+			table.SoftDeletes()
 
 			table.Primary("id")
 			table.Index("user_id")
