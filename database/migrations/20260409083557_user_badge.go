@@ -6,26 +6,28 @@ import (
 	"github.com/goravel/framework/contracts/database/schema"
 )
 
-type M20260408062548UserBadge struct{}
+type M20260409083557UserBadge struct{}
 
 // Signature The unique signature for the migration.
-func (r *M20260408062548UserBadge) Signature() string {
-	return "20260408062548_user_badge"
+func (r *M20260409083557UserBadge) Signature() string {
+	return "20260409083557_user_badge"
 }
 
 // Up Run the migrations.
-func (r *M20260408062548UserBadge) Up() error {
+func (r *M20260409083557UserBadge) Up() error {
 	if !facades.Schema().HasTable("user_badges") {
 		err := facades.Schema().Create("user_badges", func(table schema.Blueprint) {
 			table.Uuid("id")
 			table.Uuid("user_id")
 			table.String("badge_name")
-			table.String("badge_icon_url")
-			table.Text("description")
-			table.Timestamp("earned_at")
+			table.String("badge_icon_url").Nullable()
+			table.Text("description").Nullable()
+			table.Timestamp("earned_at").Nullable()
+			table.Timestamp("created_at")
 
 			table.Primary("id")
-			table.Index("user_id", "badge_name")
+			table.Index("user_id")
+			table.Index("badge_name")
 			table.Foreign("user_id").References("id").On("users")
 		})
 		if err != nil {
@@ -36,6 +38,6 @@ func (r *M20260408062548UserBadge) Up() error {
 }
 
 // Down Reverse the migrations.
-func (r *M20260408062548UserBadge) Down() error {
+func (r *M20260409083557UserBadge) Down() error {
 	return facades.Schema().DropIfExists("user_badges")
 }
