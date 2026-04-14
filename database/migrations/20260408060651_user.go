@@ -19,10 +19,10 @@ func (r *M20260408060651User) Up() error {
 		err := facades.Schema().Create("users", func(table schema.Blueprint) {
 			table.Uuid("id")
 			table.String("name")
+			table.String("role")
 			table.String("email")
 			table.String("password")
 			table.String("username")
-			table.String("full_name").Nullable()
 			table.String("avatar_url").Nullable()
 			table.String("bio").Nullable()
 			table.Date("date_of_birth").Nullable()
@@ -41,8 +41,7 @@ func (r *M20260408060651User) Up() error {
 			table.Primary("id")
 			table.Unique("email")
 			table.Unique("username")
-			table.Index("username", "email")
-			table.FullText("full_name")
+			table.Index("username", "email", "role")
 		})
 		if err != nil {
 			return err

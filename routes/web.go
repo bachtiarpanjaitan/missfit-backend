@@ -6,6 +6,7 @@ import (
 
 	"missfit/app/facades"
 	"missfit/app/http/controllers"
+	"missfit/app/http/middleware"
 )
 
 func Web() {
@@ -23,9 +24,11 @@ func Web() {
 	// userController := controllers.NewUserController()
 	authController := &controllers.AuthController{}
 
-	// ========================
-	// AUTH ROUTES
-	// ========================
-	facades.Route().Post("/register", authController.Register)
-	facades.Route().Post("/login", authController.Login)
+	api := facades.Route().Prefix("/api")
+
+	//AUTH
+	api.Post("/auth/register", authController.Register)
+	api.Post("/auth/login", authController.Login)
+	api.Middleware(middleware.Auth()).Get("/auth/me", authController.Me)
+
 }

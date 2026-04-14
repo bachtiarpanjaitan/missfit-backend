@@ -31,7 +31,7 @@ func (r *M20260408063502UserPurchasedPackage) Up() error {
 			table.Primary("id")
 			table.Index("user_id", "quiz_package_id")
 			table.Foreign("user_id").References("id").On("users")
-			table.Foreign("quiz_package_id").References("id").On("quiz_packages")
+			// table.Foreign("quiz_package_id").References("id").On("quiz_packages")
 		})
 		if err != nil {
 			return err

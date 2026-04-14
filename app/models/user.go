@@ -2,17 +2,16 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type User struct {
-	ID                    string `gorm:"primaryKey"`
+	Base
+
+	Role                  string
 	Name                  string
 	Email                 string `gorm:"unique"`
 	Username              string `gorm:"unique"`
 	Password              string `json:"-"`
-	FullName              string
 	AvatarURL             string
 	Bio                   *string
 	DateOfBirth           *time.Time
@@ -25,12 +24,4 @@ type User struct {
 	IsVerified            bool
 	IsActive              bool
 	LastLoginAt           *time.Time
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
-}
-
-func (u *User) BeforeCreate() (err error) {
-	u.ID = uuid.NewString()
-	return
 }

@@ -46,7 +46,6 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
 	// optional fields
-	fullName := ctx.Request().Input("full_name")
 	name := ctx.Request().Input("name")
 	gender := ctx.Request().Input("gender")
 
@@ -55,7 +54,6 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 		Username:     username,
 		Password:     string(hashed),
 		Name:         name,
-		FullName:     fullName,
 		Gender:       gender,
 		AuthProvider: "local",
 		IsActive:     true,
@@ -71,8 +69,10 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 
 	return ctx.Response().Json(201, map[string]interface{}{
 		"message": "register success",
-		"token":   token,
-		"user":    user,
+		"data": map[string]interface{}{
+			"token": token,
+			"user":  user,
+		},
 	})
 }
 
@@ -137,12 +137,43 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 
 	return ctx.Response().Json(200, map[string]interface{}{
 		"message": "login success",
-		"token":   token,
-		"user": map[string]interface{}{
+		"data": map[string]interface{}{
+			"token": token,
+			"user": map[string]interface{}{
+				"id":                      user.ID,
+				"email":                   user.Email,
+				"name":                    user.Name,
+				"username":                user.Username,
+				"avatar_url":              user.AvatarURL,
+				"gender":                  user.Gender,
+				"is_active":               user.IsActive,
+				"is_verified":             user.IsVerified,
+				"last_login_at":           user.LastLoginAt,
+				"auth_provider":           user.AuthProvider,
+				"total_points":            user.TotalPoints,
+				"total_quizzes_completed": user.TotalQuizzesCompleted,
+			},
+		},
+	})
+}
+
+func (r *AuthController) Me(ctx http.Context) http.Response {
+	userRaw := ctx.Value("user")
+	if userRaw == nil {
+		return ctx.Response().Json(401, map[string]interface{}{
+			"message": "unauthorized",
+		})
+	}
+
+	user := userRaw.(*models.User)
+
+	return ctx.Response().Json(200, map[string]interface{}{
+		"message": "success",
+		"data": map[string]interface{}{
 			"id":         user.ID,
 			"email":      user.Email,
+			"name":       user.Name,
 			"username":   user.Username,
-			"full_name":  user.FullName,
 			"avatar_url": user.AvatarURL,
 		},
 	})
