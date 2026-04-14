@@ -34,5 +34,6 @@ func Web() {
 
 	//QUIZZES
 	api.Middleware(middleware.Auth()).Get("/quizzes", quizController.Index)
+	api.Middleware(middleware.Auth()).Get("/quizzes/all", quizController.All)
 
 }
