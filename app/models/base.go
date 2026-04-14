@@ -8,15 +8,15 @@ import (
 )
 
 type Base struct {
-	ID        string `gorm:"type:uuid;primaryKey"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 func (b *Base) BeforeCreate(tx *gorm.DB) (err error) {
-	if b.ID == "" {
-		b.ID = uuid.NewString()
+	if b.Id == "" {
+		b.Id = uuid.NewString()
 	}
 	return
 }

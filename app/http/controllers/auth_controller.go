@@ -39,7 +39,7 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 		OrWhere("username", username).
 		First(&existing)
 
-	if existing.ID != "" {
+	if existing.Id != "" {
 		return ctx.Response().Json(400, "user sudah ada")
 	}
 
@@ -65,7 +65,7 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 
 	facades.Orm().Query().Create(&user)
 
-	token, _ := utils.GenerateToken(user.ID)
+	token, _ := utils.GenerateToken(user.Id)
 
 	return ctx.Response().Json(201, map[string]interface{}{
 		"message": "register success",
@@ -94,7 +94,7 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 		Where("email", email).
 		First(&user)
 
-	if err != nil || user.ID == "" {
+	if err != nil || user.Id == "" {
 		return ctx.Response().Json(401, map[string]string{
 			"error": "invalid credentials",
 		})
@@ -124,11 +124,11 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 
 	facades.Orm().Query().
 		Model(&models.User{}).
-		Where("id", user.ID).
+		Where("id", user.Id).
 		Update("last_login_at", now)
 
 	// generate token
-	token, err := utils.GenerateToken(user.ID)
+	token, err := utils.GenerateToken(user.Id)
 	if err != nil {
 		return ctx.Response().Json(500, map[string]string{
 			"error": "gagal generate token",
@@ -140,7 +140,7 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 		"data": map[string]interface{}{
 			"token": token,
 			"user": map[string]interface{}{
-				"id":                      user.ID,
+				"id":                      user.Id,
 				"email":                   user.Email,
 				"name":                    user.Name,
 				"username":                user.Username,
@@ -170,7 +170,7 @@ func (r *AuthController) Me(ctx http.Context) http.Response {
 	return ctx.Response().Json(200, map[string]interface{}{
 		"message": "success",
 		"data": map[string]interface{}{
-			"id":         user.ID,
+			"id":         user.Id,
 			"email":      user.Email,
 			"name":       user.Name,
 			"username":   user.Username,

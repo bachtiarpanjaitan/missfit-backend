@@ -25,6 +25,7 @@ func (r *M20260408063501QuizPackage) Up() error {
 			table.Text("thumbnail_url").Nullable()
 			table.Boolean("is_free").Default(false)
 			table.Decimal("price").Default(0)
+			table.Decimal("rating").Default(0)
 			table.String("currency", 3).Default("IDR")
 			table.Integer("total_questions").Default(0)
 			table.Integer("duration_minutes").Default(0)

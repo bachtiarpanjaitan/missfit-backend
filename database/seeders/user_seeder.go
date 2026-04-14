@@ -30,7 +30,7 @@ func (s *UserSeeder) Run() error {
 	hashed, _ := bcrypt.GenerateFromPassword([]byte("Admin1234"), bcrypt.DefaultCost)
 	users = append(users, models.User{
 		Base: models.Base{
-			ID:        uuid.NewString(),
+			Id:        uuid.NewString(),
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -48,7 +48,7 @@ func (s *UserSeeder) Run() error {
 
 		users = append(users, models.User{
 			Base: models.Base{
-				ID:        uuid.NewString(),
+				Id:        uuid.NewString(),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			},

@@ -21,6 +21,7 @@ type QuizPackage struct {
 	MaxAttempts     int
 	TotalTaken      int
 	AverageScore    float64
+	Rating          float64
 	IsPublished     bool
 	PublishedAt     *time.Time
 }
@@ -32,6 +33,7 @@ func (QuizPackage) AllowedFields() map[string]bool {
 		"category":    true,
 		"is_free":     true,
 		"created_at":  true,
+		"rating":      true,
 	}
 }
 

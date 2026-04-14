@@ -19,21 +19,35 @@ func NewQuizController() *QuizController {
 }
 
 func (r *QuizController) Index(ctx http.Context) http.Response {
-	var packages []models.QuizPackage
+	var paid_packages []models.QuizPackage
+	var free_packages []models.QuizPackage
 	query := facades.Orm().
 		Query().
 		With("Questions").
 		Where("is_published = ?", true).
+		Where("is_free = ?", false).
 		Order("created_at DESC")
 
 	allowed := models.QuizPackage{}.AllowedFields()
 	q := utils.ApplyQueryParams(ctx, query, allowed)
-	q.Find(&packages)
+	q.Find(&paid_packages)
+
+	query = facades.Orm().
+		Query().
+		With("Questions").
+		Where("is_published = ?", true).
+		Where("is_free = ?", true).
+		Order("created_at DESC")
+
+	q = utils.ApplyQueryParams(ctx, query, allowed)
+	q.Find(&free_packages)
 
 	return ctx.Response().Json(200, map[string]any{
 		"message": "data loaded",
 		"data": map[string]any{
-			"packages": packages,
+			"paid_packages":   paid_packages,
+			"free_packages":   free_packages,
+			"latest_packages": append(paid_packages, free_packages...),
 		},
 	})
 }
