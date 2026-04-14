@@ -22,6 +22,14 @@ type User struct {
 	AuthProvider          string
 	AuthProviderID        string
 	IsVerified            bool
-	IsActive              bool
+	IsActive              bool	
 	LastLoginAt           *time.Time
+}
+
+func (User) AllowedFields() map[string]bool {
+	return map[string]bool{
+		"role":  true,
+		"email": true,
+		"name": true,
+	}
 }

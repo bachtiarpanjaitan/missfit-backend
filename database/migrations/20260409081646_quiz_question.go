@@ -31,7 +31,9 @@ func (r *M20260409081646QuizQuestion) Up() error {
 
 			table.Primary("id")
 			table.Index("quiz_package_id")
-			table.Foreign("quiz_package_id").References("id").On("quiz_packages")
+			table.Foreign("quiz_package_id").
+				References("id").
+				On("quiz_packages")
 		})
 		if err != nil {
 			return err
