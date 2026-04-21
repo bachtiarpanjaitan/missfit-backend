@@ -24,6 +24,7 @@ func Web() {
 	// userController := controllers.NewUserController()
 	authController := &controllers.AuthController{}
 	quizController := &controllers.QuizController{}
+	paymentController := &controllers.PaymentController{}
 
 	api := facades.Route().Prefix("/api")
 
@@ -35,5 +36,8 @@ func Web() {
 	//QUIZZES
 	api.Middleware(middleware.Auth()).Get("/quizzes", quizController.Index)
 	api.Middleware(middleware.Auth()).Get("/quizzes/all", quizController.All)
+
+	//PAYMENT
+	api.Middleware(middleware.Auth()).Post("/payments/initiate-free", paymentController.InitiateFree)
 
 }
