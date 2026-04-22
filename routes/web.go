@@ -7,6 +7,7 @@ import (
 	"missfit/app/facades"
 	"missfit/app/http/controllers"
 	"missfit/app/http/middleware"
+	"missfit/app/services"
 )
 
 func Web() {
@@ -20,11 +21,14 @@ func Web() {
 	// static file
 	facades.Route().Static("public", "./public")
 
+	//services
+	packageService := services.NewPackageService()
+
 	// controllers
 	// userController := controllers.NewUserController()
 	authController := &controllers.AuthController{}
 	quizController := &controllers.QuizController{}
-	paymentController := &controllers.PaymentController{}
+	paymentController := controllers.NewPaymentController(packageService)
 
 	api := facades.Route().Prefix("/api")
 

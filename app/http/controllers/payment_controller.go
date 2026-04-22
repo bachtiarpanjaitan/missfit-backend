@@ -1,22 +1,24 @@
 package controllers
 
 import (
-	"time"
-
 	"missfit/app/facades"
 	"missfit/app/models"
+	"missfit/app/services"
 	"missfit/app/utils"
+	"time"
 
 	"github.com/goravel/framework/contracts/http"
 )
 
 type PaymentController struct {
 	// Dependent services
+	packageService services.PackageServiceInterface
 }
 
-func NewPaymentController() *PaymentController {
+func NewPaymentController(packageService services.PackageServiceInterface) *PaymentController {
 	return &PaymentController{
 		// Inject services
+		packageService: packageService,
 	}
 }
 
@@ -34,8 +36,9 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 		return err.(http.Response)
 	}
 
-	quizPackage := models.QuizPackage{}
-	err = facades.Orm().Query().Where("id", packageId.(string)).First(&quizPackage)
+	quizPackage, err := r.packageService.GetPackageById(packageId.(string), map[string]any{
+		"is_free": true,
+	})
 	if err != nil {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
@@ -47,9 +50,7 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 	if !quizPackage.IsFree {
 		return utils.BadRequest(ctx, "Package is not free", nil)
 	}
-
-	userPurchasedPackages := models.UserPurchasedPackage{}
-	err = facades.Orm().Query().Where("user_id", user.Id).Where("quiz_package_id", packageId.(string)).First(&userPurchasedPackages)
+	userPurchasedPackages, err := r.packageService.GetUserPurchasedPackage(user.Id, packageId.(string))
 	if err != nil {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
