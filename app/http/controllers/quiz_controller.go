@@ -3,6 +3,7 @@ package controllers
 import (
 	"missfit/app/facades"
 	"missfit/app/models"
+	"missfit/app/services"
 	"missfit/app/utils"
 
 	"github.com/goravel/framework/contracts/http"
@@ -10,11 +11,13 @@ import (
 
 type QuizController struct {
 	// Dependent services
+	packageService services.PackageServiceInterface
 }
 
-func NewQuizController() *QuizController {
+func NewQuizController(packageService services.PackageServiceInterface) *QuizController {
 	return &QuizController{
 		// Inject services
+		packageService: packageService,
 	}
 }
 
@@ -70,4 +73,17 @@ func (r *QuizController) All(ctx http.Context) http.Response {
 			"packages": packages,
 		},
 	})
+}
+
+func (r *QuizController) MyPackages(ctx http.Context) http.Response {
+	user := utils.User(ctx)
+	pagination := utils.ParsePagination(ctx)
+
+	userPackages, err := r.packageService.GetUserPackages(user.Id, pagination)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+
+	return utils.Ok(ctx, "loaded", userPackages)
+
 }

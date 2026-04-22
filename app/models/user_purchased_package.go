@@ -13,6 +13,8 @@ type UserPurchasedPackage struct {
 	PurchasedDate time.Time
 	IsActive      bool
 	ExpiredDate   time.Time
+
+	QuizPackage *QuizPackage `gorm:"foreignKey:QuizPackageId"`
 }
 
 func (UserPurchasedPackage) AllowedFields() map[string]bool {
