@@ -73,5 +73,5 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
 
-	return utils.Ok(ctx, "Payment initiated successfully", payment)
+	return utils.Ok(ctx, "Successfully get free package", nil)
 }
