@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/services"
@@ -79,7 +80,7 @@ func (r *QuizController) MyPackages(ctx http.Context) http.Response {
 	user := utils.User(ctx)
 	pagination := utils.ParsePagination(ctx)
 
-	userPackages, err := r.packageService.GetUserPackages(user.Id, pagination)
+	userPackages, err := r.packageService.GetUserPackages(user.Base.Id, pagination)
 	if err != nil {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
@@ -111,4 +112,49 @@ func (r *QuizController) GetQuestions(ctx http.Context) http.Response {
 		"questions": questions,
 		"package":   pack,
 	})
+}
+
+func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
+	data, err := utils.ValidateRequest(ctx, map[string]string{
+		"packageId":      "required|min_len:1",
+		"answers":        "required|array",
+		"score":          "required|float",
+		"totalQuestions": "required|integer",
+		"timeSpent":      "required|integer",
+		"startedAt":      "required",
+		"completedAt":    "required",
+	})
+	if err != nil {
+		return err.(http.Response)
+	}
+	user := utils.User(ctx)
+	var quizResult dtos.QuizResult
+
+	answersRaw := data["answers"].([]any)
+
+	var answers []dtos.QuizResultAnswer
+
+	for _, a := range answersRaw {
+		item := a.(map[string]any)
+
+		answers = append(answers, dtos.QuizResultAnswer{
+			QuestionId: item["questionId"].(string),
+			AnswerId:   item["answerId"].(string),
+		})
+	}
+	quizResult.Answers = answers
+	quizResult.UserId = user.Id
+	quizResult.PackageId = data["packageId"].(string)
+	quizResult.Score = data["score"].(float64)
+	quizResult.TotalQuestions = data["totalQuestions"].(float64)
+	quizResult.TimeSpent = data["timeSpent"].(float64)
+	quizResult.StartedAt = data["startedAt"].(string)
+	quizResult.CompletedAt = data["completedAt"].(string)
+
+	result, err := r.packageService.SubmitQuizResult(quizResult)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+
+	return utils.Ok(ctx, "Success", result)
 }

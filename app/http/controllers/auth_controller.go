@@ -158,23 +158,7 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 }
 
 func (r *AuthController) Me(ctx http.Context) http.Response {
-	userRaw := ctx.Value("user")
-	if userRaw == nil {
-		return ctx.Response().Json(401, map[string]interface{}{
-			"message": "unauthorized",
-		})
-	}
+	user := utils.User(ctx)
 
-	user := userRaw.(*models.User)
-
-	return ctx.Response().Json(200, map[string]interface{}{
-		"message": "success",
-		"data": map[string]interface{}{
-			"id":         user.Id,
-			"email":      user.Email,
-			"name":       user.Name,
-			"username":   user.Username,
-			"avatar_url": user.AvatarURL,
-		},
-	})
+	return utils.Ok(ctx, "success", user)
 }

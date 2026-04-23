@@ -17,15 +17,15 @@ func Auth() http.Middleware {
 		authHeader := ctx.Request().Header("Authorization")
 
 		if authHeader == "" {
-			ctx.Response().Json(401, map[string]any{
-				"message": "missing authorization header",
+			ctx.Request().AbortWithStatusJson(401, map[string]any{
+				"message": "unauthorized",
 			})
 			return
 		}
 
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			ctx.Response().Json(401, map[string]any{
-				"message": "invalid token format",
+			ctx.Request().AbortWithStatusJson(401, map[string]any{
+				"message": "unauthorized",
 			})
 			return
 		}
@@ -34,8 +34,8 @@ func Auth() http.Middleware {
 
 		userID, err := utils.ParseToken(tokenString)
 		if err != nil {
-			ctx.Response().Json(401, map[string]any{
-				"message": "invalid or expired token",
+			ctx.Request().AbortWithStatusJson(401, map[string]any{
+				"message": "unauthorized",
 			})
 			return
 		}
@@ -43,8 +43,8 @@ func Auth() http.Middleware {
 		var user models.User
 		err = facades.Orm().Query().Where("id", userID).First(&user)
 		if err != nil {
-			ctx.Response().Json(401, map[string]any{
-				"message": "user not found",
+			ctx.Request().AbortWithStatusJson(401, map[string]any{
+				"message": "unauthorized",
 			})
 			return
 		}

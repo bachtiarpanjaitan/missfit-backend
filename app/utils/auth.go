@@ -25,7 +25,10 @@ func AuthUser(ctx http.Context) (*models.User, http.Response) {
 }
 
 func User(ctx http.Context) *models.User {
-	userRaw := ctx.Value("user")
-	user, _ := userRaw.(*models.User)
+	user := ctx.Value("user").(*models.User)
+	if user == nil {
+		return nil
+	}
+
 	return user
 }
