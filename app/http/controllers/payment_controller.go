@@ -44,11 +44,11 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 	}
 
 	if quizPackage.Id == "" {
-		return utils.BadRequest(ctx, "Package not found", nil)
+		return utils.BadRequest(ctx, "Paket Tidak Ditemukan", nil)
 	}
 
 	if !quizPackage.IsFree {
-		return utils.BadRequest(ctx, "Package is not free", nil)
+		return utils.BadRequest(ctx, "Paket Tidak Gratis", nil)
 	}
 	userPurchasedPackages, err := r.packageService.GetUserPurchasedPackage(user.Id, packageId.(string))
 	if err != nil {
@@ -56,7 +56,7 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 	}
 
 	if userPurchasedPackages.Id != "" {
-		return utils.BadRequest(ctx, "You have already purchased this package", nil)
+		return utils.BadRequest(ctx, "Anda sudah membeli paket ini", nil)
 	}
 
 	payment := models.UserPurchasedPackage{
@@ -73,5 +73,5 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
 
-	return utils.Ok(ctx, "Successfully get free package", nil)
+	return utils.Ok(ctx, "Berhasil mendapatkan akses paket gratis", nil)
 }

@@ -91,7 +91,7 @@ func (r *QuizController) MyPackages(ctx http.Context) http.Response {
 func (r *QuizController) GetQuestions(ctx http.Context) http.Response {
 	package_id := ctx.Request().Route("package_id")
 	if package_id == "" {
-		return utils.BadRequest(ctx, "Missing package_id", nil)
+		return utils.BadRequest(ctx, "Paket tidak ditemukan", nil)
 	}
 
 	pack, err := r.packageService.GetPackageById(package_id, nil)
@@ -99,7 +99,7 @@ func (r *QuizController) GetQuestions(ctx http.Context) http.Response {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}
 	if !pack.IsPublished {
-		return utils.BadRequest(ctx, "Package is not published", nil)
+		return utils.BadRequest(ctx, "Paket tidak dipublikasikan", nil)
 	}
 
 	questions, err := r.packageService.GetQuestionsByPackageId(package_id)
