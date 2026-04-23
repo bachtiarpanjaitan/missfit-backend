@@ -87,3 +87,28 @@ func (r *QuizController) MyPackages(ctx http.Context) http.Response {
 	return utils.Ok(ctx, "loaded", userPackages)
 
 }
+
+func (r *QuizController) GetQuestions(ctx http.Context) http.Response {
+	package_id := ctx.Request().Route("package_id")
+	if package_id == "" {
+		return utils.BadRequest(ctx, "Missing package_id", nil)
+	}
+
+	pack, err := r.packageService.GetPackageById(package_id, nil)
+	if pack == nil || err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+	if !pack.IsPublished {
+		return utils.BadRequest(ctx, "Package is not published", nil)
+	}
+
+	questions, err := r.packageService.GetQuestionsByPackageId(package_id)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+
+	return utils.Ok(ctx, "loaded", map[string]any{
+		"questions": questions,
+		"package":   pack,
+	})
+}

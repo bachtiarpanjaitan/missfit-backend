@@ -41,6 +41,7 @@ func Web() {
 	api.Middleware(middleware.Auth()).Get("/quizzes", quizController.Index)
 	api.Middleware(middleware.Auth()).Get("/quizzes/all", quizController.All)
 	api.Middleware(middleware.Auth()).Get("/quizzes/my-packages", quizController.MyPackages)
+	api.Middleware(middleware.Auth()).Get("/quizzes/:package_id/questions", quizController.GetQuestions)
 
 	//PAYMENT
 	api.Middleware(middleware.Auth()).Post("/payments/initiate-free", paymentController.InitiateFree)

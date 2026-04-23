@@ -25,9 +25,11 @@ func (r *M20260409081647QuizOption) Up() error {
 			table.Boolean("is_correct").Default(false)
 			table.Timestamp("created_at")
 			table.Timestamp("updated_at").Nullable()
+			table.Timestamp("deleted_at").Nullable()
 
 			table.Primary("id")
 			table.Index("quiz_question_id")
+			table.Index("option_order")
 			table.Foreign("quiz_question_id").References("id").On("quiz_questions")
 		})
 		if err != nil {

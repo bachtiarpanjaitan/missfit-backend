@@ -11,6 +11,7 @@ type PackageServiceInterface interface {
 	GetActivePackage(isActive bool) (*models.QuizPackage, error)
 	GetUserPurchasedPackage(userId string, packageId string) (*models.UserPurchasedPackage, error)
 	GetUserPackages(userId string, pagination dtos.PaginationParams) (*[]models.UserPurchasedPackage, error)
+	GetQuestionsByPackageId(packageId string) (*[]models.QuizQuestion, error)
 }
 
 type PackageService struct {
@@ -56,4 +57,17 @@ func (s *PackageService) GetUserPurchasedPackage(userId string, packageId string
 		return nil, err
 	}
 	return &userPurchasedPackage, nil
+}
+
+func (s *PackageService) GetQuestionsByPackageId(packageId string) (*[]models.QuizQuestion, error) {
+	questions := []models.QuizQuestion{}
+	err := facades.Orm().Query().
+		With("Options").
+		Where("quiz_package_id", packageId).
+		Order("question_order ASC").
+		Find(&questions)
+	if err != nil {
+		return nil, err
+	}
+	return &questions, nil
 }
