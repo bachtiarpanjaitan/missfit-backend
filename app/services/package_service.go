@@ -1,6 +1,7 @@
 package services
 
 import (
+	"math"
 	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
@@ -14,6 +15,7 @@ type PackageServiceInterface interface {
 	GetUserPackages(userId string, pagination dtos.PaginationParams) (*[]models.UserPurchasedPackage, error)
 	GetQuestionsByPackageId(packageId string) (*[]models.QuizQuestion, error)
 	SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error)
+	GetUserResults(userId string) ([]dtos.MyQuizResult, error)
 }
 
 type PackageService struct {
@@ -76,6 +78,7 @@ func (s *PackageService) GetQuestionsByPackageId(packageId string) (*[]models.Qu
 
 func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error) {
 	var totalPoint float64 = 0
+	var totalWeight float64 = 0
 	var percentage float64 = 0
 	var is_passed bool = false
 	var time_taken_seconds, _ = utils.DiffSeconds(quizResult.StartedAt, quizResult.CompletedAt)
@@ -93,21 +96,22 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 	if err != nil {
 		return nil, err
 	}
-
 	answer_map := make(map[string]string)
 	for _, answer := range quizResult.Answers {
 		answer_map[answer.QuestionId] = answer.AnswerId
 	}
 
 	for _, question := range *questions {
+		totalWeight += float64(question.Point)
 		for _, option := range question.Options {
 			if option.IsCorrect && answer_map[question.Id] == option.Id {
 				totalPoint += float64(question.Point)
-				percentage = (totalPoint / float64(len(*questions))) * 100
 			}
 		}
 	}
-
+	// println(utils.ToJson(totalPoint), totalWeight)
+	// panic("stop")
+	percentage = (totalPoint / totalWeight) * 100
 	if totalPoint >= float64(pkg.PassingScore) {
 		is_passed = true
 		status = "passed"
@@ -116,7 +120,9 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		status = "failed"
 	}
 
-	userQuizAttempt := models.UserQuizAttempt{
+	// println(totalPoint, totalWeight, percentage)
+	// panic("stop")
+	quizAttempt := models.UserQuizAttempt{
 		UserId:           quizResult.UserId,
 		QuizPackageId:    quizResult.PackageId,
 		StartedAt:        utils.ToDate(quizResult.StartedAt),
@@ -128,8 +134,8 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		TimeTakenSeconds: time_taken_seconds,
 		Status:           status,
 	}
-	var attemps models.UserQuizAttempt
-	err = facades.Orm().Query().Model(&models.UserQuizAttempt{}).Create(&userQuizAttempt)
+
+	err = facades.Orm().Query().Model(&models.UserQuizAttempt{}).Create(&quizAttempt)
 	if err != nil {
 		return nil, err
 	}
@@ -145,17 +151,86 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 			}
 		}
 		userAnswers = append(userAnswers, models.UserQuizAnswer{
-			UserQuizAttemptId: userQuizAttempt.Id,
+			UserQuizAttemptId: quizAttempt.Id,
 			SelectedOptionId:  answer_map[question.Id],
 			IsCorrect:         correct,
 			PointsEarned:      point,
 		})
 	}
-
 	err = facades.Orm().Query().Model(&models.UserQuizAnswer{}).Create(&userAnswers)
 	if err != nil {
 		return nil, err
 	}
 
-	return &attemps, nil
+	return &quizAttempt, nil
+}
+
+func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, error) {
+	var userResults []models.UserQuizAttempt
+
+	err := facades.Orm().Query().
+		With("QuizPackage").
+		Where("user_id", userId).
+		Order("created_at DESC").
+		Find(&userResults)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// map untuk grouping per package
+	stats := make(map[string]*dtos.MyQuizResult)
+
+	for _, r := range userResults {
+		pkgId := r.QuizPackageId
+		highestScore := 0
+		questions, err := s.GetQuestionsByPackageId(pkgId)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, question := range *questions {
+			highestScore += int(question.Point)
+		}
+		// init kalau belum ada
+		if stats[pkgId] == nil {
+			stats[pkgId] = &dtos.MyQuizResult{
+				QuizPackageId: pkgId,
+				HighestScore:  float64(highestScore),
+			}
+		}
+
+		stat := stats[pkgId]
+
+		// akumulasi
+		stat.AvgScore += r.Percentage
+		stat.TotalAttempts++
+
+		// best score
+		if r.TotalPoints > stat.BestScore {
+			stat.BestScore = r.TotalPoints
+		}
+
+		// completed
+		if r.Status == "passed" {
+			stat.Passed++
+		}
+	}
+
+	// hitung average + convert ke slice
+	var result []dtos.MyQuizResult
+
+	for _, stat := range stats {
+		if stat.TotalAttempts > 0 {
+			stat.AvgScore = math.Round(stat.AvgScore / float64(stat.TotalAttempts))
+		}
+
+		result = append(result, *stat)
+	}
+
+	return result, nil
 }

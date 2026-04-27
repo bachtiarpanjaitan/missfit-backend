@@ -5,16 +5,16 @@ import "time"
 type UserQuizAttempt struct {
 	Base
 
-	UserId           string    `json:"user_id" gorm:"index"`
-	QuizPackageId    string    `json:"quiz_package_id" gorm:"index"`
-	StartedAt        time.Time `json:"started_at" gorm:"type:timestamptz"`
-	CompletedAt      time.Time `json:"completed_at" gorm:"type:timestamptz"`
-	Score            float64   `json:"score" gorm:"type:decimal(10,2)"`
-	TotalPoints      float64   `json:"total_points" gorm:"type:decimal(10,2)"`
-	IsPassed         *bool     `json:"is_passed"`
-	Percentage       float64   `json:"percentage" gorm:"type:decimal(10,2)"`
-	Status           string    `json:"status" gorm:"index"`
-	TimeTakenSeconds int64     `json:"time_taken_seconds" gorm:"type:bigint"`
+	UserId           string    `gorm:"column:user_id;index"`
+	QuizPackageId    string    `gorm:"column:quiz_package_id;index"`
+	StartedAt        time.Time `gorm:"column:started_at;type:timestamptz"`
+	CompletedAt      time.Time `gorm:"column:completed_at;type:timestamptz"`
+	Score            float64   `gorm:"column:score;type:decimal(10,2)"`
+	TotalPoints      float64   `gorm:"column:total_points;type:decimal(10,2)"`
+	IsPassed         *bool     `gorm:"column:is_passed"`
+	Percentage       float64   `gorm:"column:percentage;type:decimal(10,2)"`
+	Status           string    `gorm:"column:status;index"`
+	TimeTakenSeconds int64     `gorm:"column:time_taken_seconds;type:bigint"`
 
 	User            *User            `json:"user" gorm:"foreignKey:UserId"`
 	QuizPackage     *QuizPackage     `json:"quiz_package" gorm:"foreignKey:QuizPackageId"`

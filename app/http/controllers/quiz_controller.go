@@ -158,3 +158,13 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 
 	return utils.Ok(ctx, "Success", result)
 }
+
+func (r *QuizController) MyStats(ctx http.Context) http.Response {
+	user := utils.User(ctx)
+	userResults, err := r.packageService.GetUserResults(user.Id)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+
+	return utils.Ok(ctx, "loaded", userResults)
+}

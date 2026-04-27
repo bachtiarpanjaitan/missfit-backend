@@ -1,17 +1,17 @@
 package dtos
 
 type QuizResult struct {
-	UserId         string             `json:"userId"`
-	PackageId      string             `json:"packageId"`
-	Score          float64            `json:"score"`
-	TotalQuestions float64            `json:"totalQuestions"`
-	TimeSpent      float64            `json:"timeSpent"`
-	StartedAt      string             `json:"startedAt"`
-	CompletedAt    string             `json:"completedAt"`
+	UserId         string             `uuid:"userId"`
+	PackageId      string             `uuid:"packageId"`
+	Score          float64            `float:"score"`
+	TotalQuestions float64            `int:"totalQuestions"`
+	TimeSpent      float64            `int:"timeSpent"`
+	StartedAt      string             `timestamp:"startedAt"`
+	CompletedAt    string             `timestamp:"completedAt"`
 	Answers        []QuizResultAnswer `json:"answers"`
 }
 
 type QuizResultAnswer struct {
-	QuestionId string `json:"questionId"`
-	AnswerId   string `json:"answerId"`
+	QuestionId string `uuid:"questionId"`
+	AnswerId   string `uuid:"answerId"`
 }

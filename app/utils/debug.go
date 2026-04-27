@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/goravel/framework/contracts/http"
@@ -16,4 +17,9 @@ func DdResponseJson(ctx http.Context, data any) http.Response {
 		"message": "data debug",
 		"data":    data,
 	})
+}
+
+func ToJson(data any) string {
+	jsonData, _ := json.MarshalIndent(data, "", "  ")
+	return string(jsonData)
 }
