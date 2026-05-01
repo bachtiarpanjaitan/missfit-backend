@@ -100,11 +100,25 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		answer_map[answer.QuestionId] = answer.AnswerId
 	}
 
+	var correctAnswers int = 0
+	var wrongAnswers int = 0
+	var skipAnswers int = 0
 	for _, question := range *questions {
 		totalWeight += float64(question.Point)
+		if answer_map[question.Id] == "skipped" {
+			skipAnswers++
+			continue
+		}
 		for _, option := range question.Options {
 			if option.IsCorrect && answer_map[question.Id] == option.Id {
 				totalPoint += float64(question.Point)
+				correctAnswers++
+			}
+
+			if option.IsCorrect {
+				if answer_map[question.Id] != option.Id {
+					wrongAnswers++
+				}
 			}
 		}
 	}
@@ -132,6 +146,9 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		IsPassed:         &is_passed,
 		TimeTakenSeconds: time_taken_seconds,
 		Status:           status,
+		CorrectAnswers:   correctAnswers,
+		WrongAnswers:     wrongAnswers,
+		SkipAnswers:      skipAnswers,
 	}
 
 	err = facades.Orm().Query().Model(&models.UserQuizAttempt{}).Create(&quizAttempt)

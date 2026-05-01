@@ -19,7 +19,7 @@ func (r *M20260409082702UserQuizAnswer) Up() error {
 		err := facades.Schema().Create("user_quiz_answers", func(table schema.Blueprint) {
 			table.Uuid("id")
 			table.Uuid("user_quiz_attempt_id")
-			table.Uuid("selected_option_id")
+			table.String("selected_option_id")
 			table.Boolean("is_correct").Default(false)
 			table.Integer("points_earned").Default(0)
 			table.Timestamps()
@@ -29,7 +29,6 @@ func (r *M20260409082702UserQuizAnswer) Up() error {
 			table.Index("user_quiz_attempt_id")
 			table.Index("selected_option_id")
 			table.Foreign("user_quiz_attempt_id").References("id").On("user_quiz_attempts")
-			table.Foreign("selected_option_id").References("id").On("quiz_options")
 		})
 		if err != nil {
 			return err

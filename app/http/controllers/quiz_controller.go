@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
@@ -143,7 +142,6 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 			AnswerId:   item["answerId"].(string),
 		})
 	}
-	fmt.Println("data", data)
 	quizResult.Answers = answers
 	quizResult.UserId = user.Id
 	quizResult.PackageId = data["packageId"].(string)
@@ -161,7 +159,6 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 		return utils.BadRequest(ctx, "Invalid completedAt", err)
 	}
 	quizResult.CompletedAt = completedAt
-
 	result, err := r.packageService.SubmitQuizResult(quizResult)
 	if err != nil {
 		return utils.InternalServerError(ctx, "Internal server error", err)

@@ -15,5 +15,5 @@ type QuizResult struct {
 
 type QuizResultAnswer struct {
 	QuestionId string `uuid:"questionId"`
-	AnswerId   string `uuid:"answerId"`
+	AnswerId   string `string:"answerId"`
 }
