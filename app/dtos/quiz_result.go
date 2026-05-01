@@ -1,13 +1,15 @@
 package dtos
 
+import "time"
+
 type QuizResult struct {
 	UserId         string             `uuid:"userId"`
 	PackageId      string             `uuid:"packageId"`
 	Score          float64            `float:"score"`
 	TotalQuestions float64            `int:"totalQuestions"`
 	TimeSpent      float64            `int:"timeSpent"`
-	StartedAt      string             `timestamp:"startedAt"`
-	CompletedAt    string             `timestamp:"completedAt"`
+	StartedAt      time.Time          `timestamp:"startedAt"`
+	CompletedAt    time.Time          `timestamp:"completedAt"`
 	Answers        []QuizResultAnswer `json:"answers"`
 }
 

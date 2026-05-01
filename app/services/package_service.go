@@ -81,9 +81,8 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 	var totalWeight float64 = 0
 	var percentage float64 = 0
 	var is_passed bool = false
-	var time_taken_seconds, _ = utils.DiffSeconds(quizResult.StartedAt, quizResult.CompletedAt)
+	var time_taken_seconds int64 = utils.DiffSeconds(quizResult.StartedAt, quizResult.CompletedAt)
 	var status string = "pending"
-
 	pkg, err := s.GetPackageById(quizResult.PackageId, nil)
 	if err != nil {
 		return nil, err
@@ -140,6 +139,11 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		return nil, err
 	}
 
+	UserQuizAttempModel := models.UserQuizAttempt{}
+	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttempModel)
+	if quizAttempData != nil {
+		return &UserQuizAttempModel, nil
+	}
 	var userAnswers []models.UserQuizAnswer
 	for _, question := range *questions {
 		var correct bool = false
@@ -162,7 +166,7 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		return nil, err
 	}
 
-	return &quizAttempt, nil
+	return &UserQuizAttempModel, nil
 }
 
 func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, error) {

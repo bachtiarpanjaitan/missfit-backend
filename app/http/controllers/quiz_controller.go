@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
@@ -142,14 +143,24 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 			AnswerId:   item["answerId"].(string),
 		})
 	}
+	fmt.Println("data", data)
 	quizResult.Answers = answers
 	quizResult.UserId = user.Id
 	quizResult.PackageId = data["packageId"].(string)
 	quizResult.Score = data["score"].(float64)
 	quizResult.TotalQuestions = data["totalQuestions"].(float64)
 	quizResult.TimeSpent = data["timeSpent"].(float64)
-	quizResult.StartedAt = data["startedAt"].(string)
-	quizResult.CompletedAt = data["completedAt"].(string)
+
+	startedAt, err := utils.ToDateTime(data["startedAt"].(string))
+	if err != nil {
+		return utils.BadRequest(ctx, "Invalid startedAt", err)
+	}
+	quizResult.StartedAt = startedAt
+	completedAt, err := utils.ToDateTime(data["completedAt"].(string))
+	if err != nil {
+		return utils.BadRequest(ctx, "Invalid completedAt", err)
+	}
+	quizResult.CompletedAt = completedAt
 
 	result, err := r.packageService.SubmitQuizResult(quizResult)
 	if err != nil {
