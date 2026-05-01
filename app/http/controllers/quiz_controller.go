@@ -130,6 +130,15 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 	user := utils.User(ctx)
 	var quizResult dtos.QuizResult
 
+	//reach max attempt
+	hasMaxAttempts, err := r.packageService.HasMaxAttempts(user.Id, data["packageId"].(string))
+	if err != nil {
+		return utils.InternalServerError(ctx, "Internal server error", err)
+	}
+	if hasMaxAttempts {
+		return utils.BadRequest(ctx, "Anda telah mencapai batas maksimum kesempatan mengikuti kuis ini", nil)
+	}
+
 	answersRaw := data["answers"].([]any)
 
 	var answers []dtos.QuizResultAnswer
@@ -142,6 +151,7 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 			AnswerId:   item["answerId"].(string),
 		})
 	}
+
 	quizResult.Answers = answers
 	quizResult.UserId = user.Id
 	quizResult.PackageId = data["packageId"].(string)

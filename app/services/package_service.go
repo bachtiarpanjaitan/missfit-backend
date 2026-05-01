@@ -16,6 +16,7 @@ type PackageServiceInterface interface {
 	GetQuestionsByPackageId(packageId string) (*[]models.QuizQuestion, error)
 	SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error)
 	GetUserResults(userId string) ([]dtos.MyQuizResult, error)
+	HasMaxAttempts(userId string, packageId string) (bool, error)
 }
 
 type PackageService struct {
@@ -254,4 +255,20 @@ func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, err
 	}
 
 	return result, nil
+}
+
+func (s *PackageService) HasMaxAttempts(userId string, packageId string) (bool, error) {
+	pkg, err := s.GetPackageById(packageId, nil)
+	if err != nil {
+		return false, err
+	}
+	if pkg == nil {
+		return false, nil
+	}
+	var count int64
+	count, err = facades.Orm().Query().Model(&models.UserQuizAttempt{}).Where("user_id", userId).Where("quiz_package_id", packageId).Count()
+	if err != nil {
+		return false, err
+	}
+	return count >= int64(pkg.MaxAttempts), nil
 }
