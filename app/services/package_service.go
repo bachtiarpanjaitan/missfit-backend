@@ -6,6 +6,7 @@ import (
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/utils"
+	"time"
 )
 
 type PackageServiceInterface interface {
@@ -17,6 +18,8 @@ type PackageServiceInterface interface {
 	SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error)
 	GetUserResults(userId string) ([]dtos.MyQuizResult, error)
 	HasMaxAttempts(userId string, packageId string) (bool, error)
+	GetGlobalRankings(limit int) (*[]dtos.Ranking, error)
+	GetMyRank(packageId string) (*dtos.Ranking, error)
 }
 
 type PackageService struct {
@@ -157,6 +160,27 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		return nil, err
 	}
 
+	//save ranking
+	ranking := models.Ranking{}
+	exist := facades.Orm().Query().Where("user_id = ? AND quiz_package_id = ?", quizResult.UserId, quizResult.PackageId).First(&ranking)
+	if exist == nil && ranking.Id != "" {
+		ranking.TotalPoints = totalPoint
+		ranking.LastUpdated = time.Now()
+		facades.Orm().Query().Where("id = ?", ranking.Id).Save(&ranking)
+	} else {
+		ranking = models.Ranking{
+			UserId:        quizResult.UserId,
+			QuizPackageId: quizResult.PackageId,
+			TotalPoints:   totalPoint,
+			CreatedAt:     time.Now(),
+			LastUpdated:   time.Now(),
+		}
+		err = facades.Orm().Query().Model(&models.Ranking{}).Create(&ranking)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	UserQuizAttempModel := models.UserQuizAttempt{}
 	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttempModel)
 	if quizAttempData != nil {
@@ -271,4 +295,50 @@ func (s *PackageService) HasMaxAttempts(userId string, packageId string) (bool, 
 		return false, err
 	}
 	return count >= int64(pkg.MaxAttempts), nil
+}
+
+func (s *PackageService) GetGlobalRankings(limit int) (*[]dtos.Ranking, error) {
+	rankings := []dtos.Ranking{}
+	err := facades.Orm().Query().
+		Table("rankings").
+		Join("JOIN users ON users.id = rankings.user_id").
+		Select(`
+        rankings.user_id,
+        users.username,
+				users.name as name,
+        users.avatar_url as user_avatar,
+        SUM(rankings.total_points) as total_points,
+				RANK() OVER (ORDER BY SUM(rankings.total_points) DESC) as rank
+    `).
+		Group("rankings.user_id, users.username, users.avatar_url, users.name").
+		Order("total_points DESC").
+		Limit(limit).
+		Find(&rankings)
+	if err != nil {
+		return nil, err
+	}
+	return &rankings, nil
+}
+
+func (s *PackageService) GetMyRank(userId string) (*dtos.Ranking, error) {
+	ranking := dtos.Ranking{}
+	err := facades.Orm().Query().Raw(`
+    SELECT *
+    FROM (
+        SELECT 
+            rankings.user_id,
+            users.username,
+            users.avatar_url,
+            SUM(rankings.total_points) as total_points,
+            RANK() OVER (ORDER BY SUM(rankings.total_points) DESC) as rank
+        FROM rankings
+        JOIN users ON users.id = rankings.user_id
+        GROUP BY rankings.user_id, users.username, users.avatar_url
+    ) ranked
+    WHERE ranked.user_id = ?
+`, userId).Scan(&ranking)
+	if err != nil {
+		return nil, err
+	}
+	return &ranking, nil
 }

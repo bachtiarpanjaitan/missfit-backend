@@ -20,11 +20,7 @@ func (r *M20260409093135Ranking) Up() error {
 			table.Uuid("id")
 			table.Uuid("user_id")
 			table.Uuid("quiz_package_id")
-			table.Integer("rank_position").Nullable()
 			table.Integer("total_points").Default(0)
-			table.Integer("total_quizzes_completed").Default(0)
-			table.Decimal("average_score").Default(0)
-			table.Integer("best_score").Default(0)
 			table.Timestamp("last_updated").Nullable()
 			table.Timestamp("created_at")
 

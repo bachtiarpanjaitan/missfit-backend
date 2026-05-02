@@ -29,6 +29,7 @@ func Web() {
 	authController := &controllers.AuthController{}
 	quizController := controllers.NewQuizController(packageService)
 	paymentController := controllers.NewPaymentController(packageService)
+	rankingController := controllers.NewRankingController(packageService)
 
 	api := facades.Route().Prefix("/api")
 
@@ -47,5 +48,10 @@ func Web() {
 
 	//PAYMENT
 	api.Middleware(middleware.Auth()).Post("/payments/initiate-free", paymentController.InitiateFree)
+
+	//RANKINGS
+	api.Middleware(middleware.Auth()).Get("/rankings/global", rankingController.GlobalRankings)
+	api.Middleware(middleware.Auth()).Get("/rankings/package/:package_id", rankingController.PackageRankings)
+	api.Middleware(middleware.Auth()).Get("/rankings/my-rank", rankingController.MyRank)
 
 }
