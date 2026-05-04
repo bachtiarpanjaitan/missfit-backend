@@ -20,6 +20,7 @@ type PackageServiceInterface interface {
 	HasMaxAttempts(userId string, packageId string) (bool, error)
 	GetGlobalRankings(limit int) (*[]dtos.Ranking, error)
 	GetMyRank(packageId string) (*dtos.Ranking, error)
+	GetPackageRank(packageId string) (map[string][]dtos.Ranking, error)
 }
 
 type PackageService struct {
@@ -332,7 +333,7 @@ func (s *PackageService) GetMyRank(userId string) (*dtos.Ranking, error) {
             SUM(rankings.total_points) as total_points,
             RANK() OVER (ORDER BY SUM(rankings.total_points) DESC) as rank
         FROM rankings
-        JOIN users ON users.id = rankings.user_id
+        LEFT JOIN users ON users.id = rankings.user_id
         GROUP BY rankings.user_id, users.username, users.avatar_url
     ) ranked
     WHERE ranked.user_id = ?
@@ -341,4 +342,31 @@ func (s *PackageService) GetMyRank(userId string) (*dtos.Ranking, error) {
 		return nil, err
 	}
 	return &ranking, nil
+}
+
+func (s *PackageService) GetPackageRank(packageId string) (map[string][]dtos.Ranking, error) {
+	var rankings []dtos.Ranking
+
+	err := facades.Orm().Query().Raw(`
+        SELECT 
+            r.user_id,
+            COALESCE(u.username, '') as username,
+						COALESCE(u.name, '') as name,
+            COALESCE(u.avatar_url, '') as user_avatar,
+            SUM(r.total_points) as total_points,
+            RANK() OVER (ORDER BY SUM(r.total_points) DESC) as rank
+        FROM rankings r
+        LEFT JOIN users u ON u.id = r.user_id
+        WHERE r.quiz_package_id = ?
+        GROUP BY r.user_id, u.username, u.name, u.avatar_url
+    `, packageId).Scan(&rankings)
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]dtos.Ranking)
+	result[packageId] = rankings
+
+	return result, nil
 }

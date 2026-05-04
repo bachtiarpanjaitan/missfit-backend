@@ -51,7 +51,7 @@ func Web() {
 
 	//RANKINGS
 	api.Middleware(middleware.Auth()).Get("/rankings/global", rankingController.GlobalRankings)
-	api.Middleware(middleware.Auth()).Get("/rankings/package/:package_id", rankingController.PackageRankings)
+	api.Middleware(middleware.Auth()).Get("/rankings/package/:package_id", rankingController.PackageRank)
 	api.Middleware(middleware.Auth()).Get("/rankings/my-rank", rankingController.MyRank)
 
 }
