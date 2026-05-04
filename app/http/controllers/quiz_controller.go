@@ -169,7 +169,8 @@ func (r *QuizController) SubmitResults(ctx http.Context) http.Response {
 		return utils.BadRequest(ctx, "Invalid completedAt", err)
 	}
 	quizResult.CompletedAt = completedAt
-	result, err := r.packageService.SubmitQuizResult(quizResult)
+
+	result, err := r.packageService.SubmitQuizResult(quizResult, user)
 	if err != nil {
 		return utils.InternalServerError(ctx, "Internal server error", err)
 	}

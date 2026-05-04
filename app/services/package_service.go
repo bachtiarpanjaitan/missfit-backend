@@ -15,7 +15,7 @@ type PackageServiceInterface interface {
 	GetUserPurchasedPackage(userId string, packageId string) (*models.UserPurchasedPackage, error)
 	GetUserPackages(userId string, pagination dtos.PaginationParams) (*[]models.UserPurchasedPackage, error)
 	GetQuestionsByPackageId(packageId string) (*[]models.QuizQuestion, error)
-	SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error)
+	SubmitQuizResult(quizResult dtos.QuizResult, user *models.User) (*models.UserQuizAttempt, error)
 	GetUserResults(userId string) ([]dtos.MyQuizResult, error)
 	HasMaxAttempts(userId string, packageId string) (bool, error)
 	GetGlobalRankings(limit int) (*[]dtos.Ranking, error)
@@ -28,6 +28,10 @@ type PackageService struct {
 
 func NewPackageService() PackageServiceInterface {
 	return &PackageService{}
+}
+
+func (s *PackageService) MyProgress(userId string) (*dtos.UserProgress, error) {
+	return &dtos.UserProgress{}, nil
 }
 
 func (s *PackageService) GetPackageById(id string, filters map[string]any) (*models.QuizPackage, error) {
@@ -81,7 +85,7 @@ func (s *PackageService) GetQuestionsByPackageId(packageId string) (*[]models.Qu
 	return &questions, nil
 }
 
-func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.UserQuizAttempt, error) {
+func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *models.User) (*models.UserQuizAttempt, error) {
 	var totalPoint float64 = 0
 	var totalWeight float64 = 0
 	var percentage float64 = 0
@@ -138,9 +142,24 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		status = "failed"
 	}
 
-	// println(totalPoint, totalWeight, percentage)
-	// panic("stop")
+	//db transaction
+	tx, err := facades.DB().BeginTransaction()
+	if err != nil {
+		return nil, err
+	}
+
+	latestAttemptModel := models.UserQuizAttempt{}
+	facades.Orm().Query().
+		Where("user_id = ? AND quiz_package_id = ?", quizResult.UserId, quizResult.PackageId).
+		Order("created_at DESC").
+		First(&latestAttemptModel)
+
 	quizAttempt := models.UserQuizAttempt{
+		Base: models.Base{
+			Id:        utils.GenerateId(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 		UserId:           quizResult.UserId,
 		QuizPackageId:    quizResult.PackageId,
 		StartedAt:        utils.ToDate(quizResult.StartedAt),
@@ -155,9 +174,10 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 		WrongAnswers:     wrongAnswers,
 		SkipAnswers:      skipAnswers,
 	}
-
-	err = facades.Orm().Query().Model(&models.UserQuizAttempt{}).Create(&quizAttempt)
+	var UserQuizAttemptModel models.UserQuizAttempt
+	_, err = tx.Table("user_quiz_attempts").Insert(&quizAttempt)
 	if err != nil {
+		tx.Rollback()
 		return nil, err
 	}
 
@@ -167,49 +187,95 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult) (*models.U
 	if exist == nil && ranking.Id != "" {
 		ranking.TotalPoints = totalPoint
 		ranking.LastUpdated = time.Now()
-		facades.Orm().Query().Where("id = ?", ranking.Id).Save(&ranking)
+
+		// facades.Orm().Query().Where("id = ?", ranking.Id).Save(&ranking)
+		_, err = tx.Table("rankings").Where("id = ?", ranking.Id).Update(map[string]any{
+			"total_points": ranking.TotalPoints,
+			"last_updated": ranking.LastUpdated,
+		})
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	} else {
 		ranking = models.Ranking{
+			Id:            utils.GenerateId(),
 			UserId:        quizResult.UserId,
 			QuizPackageId: quizResult.PackageId,
 			TotalPoints:   totalPoint,
 			CreatedAt:     time.Now(),
 			LastUpdated:   time.Now(),
 		}
-		err = facades.Orm().Query().Model(&models.Ranking{}).Create(&ranking)
+		_, err = tx.Table("rankings").Insert(&ranking)
+		// err = facades.Orm().Query().Model(&models.Ranking{}).Create(&ranking)
 		if err != nil {
+			tx.Rollback()
 			return nil, err
 		}
 	}
 
-	UserQuizAttempModel := models.UserQuizAttempt{}
-	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttempModel)
+	UserQuizAttemptModel = models.UserQuizAttempt{}
+	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttemptModel)
 	if quizAttempData != nil {
-		return &UserQuizAttempModel, nil
+		return &UserQuizAttemptModel, nil
+	} else {
+		user.TotalQuizzesCompleted += 1
 	}
-	var userAnswers []models.UserQuizAnswer
+
+	//update user profil
+	if latestAttemptModel.Id != "" {
+		user.TotalPoints = (user.TotalPoints - latestAttemptModel.TotalPoints) + totalPoint
+	} else {
+		user.TotalPoints += totalPoint
+	}
+
+	// err = facades.Orm().Query().Where("id", user.Id).Save(&user)
+	_, err = tx.Table("users").Where("id = ?", user.Id).Update(map[string]any{
+		"total_points":            user.TotalPoints,
+		"total_quizzes_completed": user.TotalQuizzesCompleted,
+	})
+
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
 	for _, question := range *questions {
 		var correct bool = false
 		var point float64 = 0
+
+		// fmt.Println(utils.ToJson(answer_map))
+		// fmt.Println(utils.ToJson(question.Id))
+
 		for _, option := range question.Options {
 			if option.IsCorrect && answer_map[question.Id] == option.Id {
 				correct = true
 				point = float64(question.Point)
 			}
 		}
-		userAnswers = append(userAnswers, models.UserQuizAnswer{
+
+		newAnswer := models.UserQuizAnswer{
+			Base: models.Base{
+				Id:        utils.GenerateId(),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
 			UserQuizAttemptId: quizAttempt.Id,
 			SelectedOptionId:  answer_map[question.Id],
 			IsCorrect:         correct,
 			PointsEarned:      point,
-		})
-	}
-	err = facades.Orm().Query().Model(&models.UserQuizAnswer{}).Create(&userAnswers)
-	if err != nil {
-		return nil, err
+		}
+
+		// println(utils.ToJson(&newAnswer))
+		_, err = tx.Table("user_quiz_answers").Insert(&newAnswer)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 
-	return &UserQuizAttempModel, nil
+	tx.Commit()
+	return &quizAttempt, nil
 }
 
 func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, error) {
@@ -220,10 +286,6 @@ func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, err
 		Where("user_id", userId).
 		Order("created_at DESC").
 		Find(&userResults)
-
-	if err != nil {
-		return nil, err
-	}
 
 	if err != nil {
 		return nil, err

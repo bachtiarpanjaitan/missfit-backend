@@ -26,7 +26,7 @@ func Web() {
 
 	// controllers
 	// userController := controllers.NewUserController()
-	authController := &controllers.AuthController{}
+	authController := controllers.NewAuthController(packageService)
 	quizController := controllers.NewQuizController(packageService)
 	paymentController := controllers.NewPaymentController(packageService)
 	rankingController := controllers.NewRankingController(packageService)

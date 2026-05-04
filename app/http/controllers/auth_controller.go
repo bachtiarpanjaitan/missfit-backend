@@ -6,17 +6,19 @@ import (
 	"missfit/app/utils"
 	"time"
 
+	"missfit/app/services"
+
 	"github.com/goravel/framework/contracts/http"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthController struct {
-	// Dependent services
+	packageService services.PackageServiceInterface
 }
 
-func NewAuthController() *AuthController {
+func NewAuthController(packageService services.PackageServiceInterface) *AuthController {
 	return &AuthController{
-		// Inject services
+		packageService: packageService,
 	}
 }
 
@@ -160,5 +162,8 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 func (r *AuthController) Me(ctx http.Context) http.Response {
 	user := utils.User(ctx)
 
-	return utils.Ok(ctx, "success", user)
+	return utils.Ok(ctx, "success", map[string]interface{}{
+		"user":  user,
+		"token": ctx.Request().Header("Authorization"),
+	})
 }
