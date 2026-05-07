@@ -91,20 +91,10 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 
 	// validasi basic (biar gak kirim kosong terus berharap keajaiban)
 	if email == "" || password == "" {
-		return ctx.Response().Json(400, map[string]string{
-			"error": "email dan password wajib",
-		})
+		return utils.BadRequest(ctx, "Email atau password tidak ditemukan", nil)
 	}
 
 	var user models.User
-
-	if !user.IsActive {
-		utils.BadRequest(ctx, "Akunmu sedang tidak aktif", nil)
-	}
-
-	if !user.IsVerified {
-		utils.BadRequest(ctx, "Akunmu belum terverifikasi, silakan verifikasi terlebih dahulu", nil)
-	}
 
 	// ambil user berdasarkan email
 	err := facades.Orm().Query().
@@ -112,9 +102,15 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 		First(&user)
 
 	if err != nil || user.Id == "" {
-		return ctx.Response().Json(401, map[string]string{
-			"error": "invalid credentials",
-		})
+		return utils.BadRequest(ctx, "Pengguna tidak ditemukan", nil)
+	}
+
+	if !user.IsActive {
+		return utils.BadRequest(ctx, "Akunmu sedang tidak aktif", nil)
+	}
+
+	if !user.IsVerified {
+		return utils.BadRequest(ctx, "Akunmu belum terverifikasi, silakan verifikasi terlebih dahulu", nil)
 	}
 
 	// cek password
@@ -124,9 +120,7 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 	)
 
 	if err != nil {
-		return ctx.Response().Json(401, map[string]string{
-			"error": "invalid credentials",
-		})
+		return utils.BadRequest(ctx, "Email atau Password salah", nil)
 	}
 
 	// update last login
@@ -159,6 +153,9 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 				"auth_provider":           user.AuthProvider,
 				"total_points":            user.TotalPoints,
 				"total_quizzes_completed": user.TotalQuizzesCompleted,
+				"gender":                  user.Gender,
+				"phone":                   user.Phone,
+				"bio":                     user.Bio,
 			},
 		},
 	})
