@@ -15,8 +15,8 @@ type User struct {
 	AvatarURL             string
 	Bio                   *string
 	DateOfBirth           *time.Time
-	Gender                string
-	Phone                 *string
+	Gender                string `json:"gender"`
+	Phone                 string
 	TotalPoints           float64
 	TotalQuizzesCompleted int
 	AuthProvider          string

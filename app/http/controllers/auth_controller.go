@@ -28,8 +28,16 @@ func (r *AuthController) Index(ctx http.Context) http.Response {
 
 func (r *AuthController) Register(ctx http.Context) http.Response {
 	email := ctx.Request().Input("email")
+	name := ctx.Request().Input("name")
 	password := ctx.Request().Input("password")
+	confirmPassword := ctx.Request().Input("confirm_password")
+	gender := ctx.Request().Input("gender")
 	username := ctx.Request().Input("username")
+	phone := ctx.Request().Input("phone")
+
+	if confirmPassword != password {
+		return ctx.Response().Json(400, "password dan konfirmasi password tidak sama")
+	}
 
 	if email == "" || password == "" || username == "" {
 		return ctx.Response().Json(400, "email, username, password wajib")
@@ -42,35 +50,34 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 		First(&existing)
 
 	if existing.Id != "" {
-		return ctx.Response().Json(400, "user sudah ada")
+		return ctx.Response().Json(400, "username atau email sudah pernah digunakan")
 	}
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
-	// optional fields
-	name := ctx.Request().Input("name")
-	gender := ctx.Request().Input("gender")
-
 	user := models.User{
+		Name:         name,
 		Email:        email,
 		Username:     username,
 		Password:     string(hashed),
-		Name:         name,
 		Gender:       gender,
 		AuthProvider: "local",
 		IsActive:     true,
 		IsVerified:   false,
+		Role:         "user",
+		Phone:        phone,
 	}
 
-	// avatar default biar gak kosong kayak harapan hidup dev
-	user.AvatarURL = "https://ui-avatars.com/api/?name=" + username
+	appUrl := facades.Config().GetString("app.url")
+
+	user.AvatarURL = appUrl + "/public/uploads/avatar/default.svg"
 
 	facades.Orm().Query().Create(&user)
 
 	token, _ := utils.GenerateToken(user.Id)
 
 	return ctx.Response().Json(201, map[string]interface{}{
-		"message": "register success",
+		"message": "Berhasil mendaftar, silahkan verifikasi email anda",
 		"data": map[string]interface{}{
 			"token": token,
 			"user":  user,
@@ -90,6 +97,14 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 	}
 
 	var user models.User
+
+	if !user.IsActive {
+		utils.BadRequest(ctx, "Akunmu sedang tidak aktif", nil)
+	}
+
+	if !user.IsVerified {
+		utils.BadRequest(ctx, "Akunmu belum terverifikasi, silakan verifikasi terlebih dahulu", nil)
+	}
 
 	// ambil user berdasarkan email
 	err := facades.Orm().Query().
@@ -114,13 +129,6 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 		})
 	}
 
-	// cek user aktif
-	if !user.IsActive {
-		return ctx.Response().Json(403, map[string]string{
-			"error": "user tidak aktif",
-		})
-	}
-
 	// update last login
 	now := time.Now()
 
@@ -132,14 +140,12 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 	// generate token
 	token, err := utils.GenerateToken(user.Id)
 	if err != nil {
-		return ctx.Response().Json(500, map[string]string{
-			"error": "gagal generate token",
-		})
+		return utils.InternalServerError(ctx, "Gagal membuat token", err)
 	}
 
-	return ctx.Response().Json(200, map[string]interface{}{
-		"message": "login success",
-		"data": map[string]interface{}{
+	return utils.Ok(ctx, "login success", map[string]interface{}{
+		"token": token,
+		"user": map[string]interface{}{
 			"token": token,
 			"user": map[string]interface{}{
 				"id":                      user.Id,
@@ -147,7 +153,6 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 				"name":                    user.Name,
 				"username":                user.Username,
 				"avatar_url":              user.AvatarURL,
-				"gender":                  user.Gender,
 				"is_active":               user.IsActive,
 				"is_verified":             user.IsVerified,
 				"last_login_at":           user.LastLoginAt,
