@@ -56,7 +56,14 @@ func (s *PackageService) GetActivePackage(isActive bool) (*models.QuizPackage, e
 func (s *PackageService) GetUserPackages(userId string, pagination dtos.PaginationParams) (*[]models.UserPurchasedPackage, error) {
 	userPackages := []models.UserPurchasedPackage{}
 	offset := (pagination.Page - 1) * pagination.Limit
-	err := facades.Orm().Query().With("QuizPackage").Where("user_id", userId).Where("is_active", true).Offset(offset).Limit(pagination.Limit).Order(pagination.Sort + " " + pagination.Order).Find(&userPackages)
+	err := facades.Orm().Query().
+		Table("user_purchased_packages").
+		Join("left join quiz_packages on quiz_packages.id = user_purchased_packages.quiz_package_id").
+		With("QuizPackage").
+		Where("user_id", userId).
+		Where("is_active", true).
+		Where("quiz_packages.is_published", true).
+		Offset(offset).Limit(pagination.Limit).Order(pagination.Sort + " " + pagination.Order).Find(&userPackages)
 	if err != nil {
 		return nil, err
 	}
