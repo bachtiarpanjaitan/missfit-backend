@@ -16,6 +16,7 @@ import (
 type MidtransServiceInterface interface {
 	CreateSnapTransaction(req MidtransSnapRequest) (*MidtransSnapResponse, error)
 	CheckTransactionStatus(orderId string) (*MidtransTransactionStatus, error)
+	CancelTransaction(orderId string) (*MidtransTransactionStatus, error)
 	VerifyNotificationSignature(orderId, statusCode, grossAmount, signatureKey string) bool
 }
 
@@ -276,6 +277,38 @@ func (s *MidtransService) CheckTransactionStatus(orderId string) (*MidtransTrans
 	if err := json.Unmarshal(respBody, &status); err != nil {
 		return nil, fmt.Errorf("midtrans: gagal parse status response: %w", err)
 	}
+
+	return &status, nil
+}
+
+// ─── CancelTransaction ──────────────────────────────────────────────────────
+
+// CancelTransaction membatalkan transaksi di Midtrans via Core API.
+// Digunakan ketika user ingin mengganti metode pembayaran.
+func (s *MidtransService) CancelTransaction(orderId string) (*MidtransTransactionStatus, error) {
+	url := fmt.Sprintf("%s/%s/cancel", s.getAPIBaseURL(), orderId)
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("midtrans: gagal membuat HTTP request cancel: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", s.getAuthHeader())
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("midtrans: HTTP request cancel gagal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("midtrans: gagal membaca response cancel: %w", err)
+	}
+
+	var status MidtransTransactionStatus
+	// Abaikan error parse — transaksi mungkin sudah expire/tidak ada di Midtrans
+	json.Unmarshal(respBody, &status) //nolint:errcheck
 
 	return &status, nil
 }

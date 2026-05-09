@@ -63,6 +63,12 @@ func Web() {
 	// Cek status transaksi manual oleh user
 	api.Middleware(middleware.Auth()).Get("/payments/status/:order_id", paymentController.CheckStatus)
 
+	// Cek transaksi pending untuk paket tertentu (dipanggil saat PaymentFlowScreen dibuka)
+	api.Middleware(middleware.Auth()).Get("/payments/pending/:package_id", paymentController.GetPending)
+
+	// Batalkan transaksi pending (saat user mau ganti metode pembayaran)
+	api.Middleware(middleware.Auth()).Post("/payments/cancel-transaction/:order_id", paymentController.CancelPendingTransaction)
+
 	// ─── RANKINGS ─────────────────────────────────────────────────────────────
 	api.Middleware(middleware.Auth()).Get("/rankings/global", rankingController.GlobalRankings)
 	api.Middleware(middleware.Auth()).Get("/rankings/package/:package_id", rankingController.PackageRank)

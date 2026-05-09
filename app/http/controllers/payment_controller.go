@@ -97,7 +97,7 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 	data, err := utils.ValidateRequest(ctx, map[string]string{
 		"packageId": "required|min_len:1",
-		"method":    "required|in:dana,gopay,ovo,bca_va,mandiri",
+		"method":    "required|in:gopay,bca_va,mandiri,bri_va,bni_va",
 	})
 	if err != nil {
 		return err.(http.Response)
@@ -135,53 +135,39 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		return utils.BadRequest(ctx, "Anda sudah memiliki paket ini", nil)
 	}
 
-	// Cek apakah ada transaksi pending yang belum selesai untuk paket ini
-	var pendingTransaction models.Transaction
-	facades.Orm().Query().
-		Where("user_id", user.Id).
-		Where("quiz_package_id", packageId).
-		Where("status", "pending").
-		First(&pendingTransaction)
-
-	if pendingTransaction.Id != "" {
-		// Kembalikan transaksi pending yang sudah ada alih-alih buat yang baru
-		return utils.Ok(ctx, "Transaksi pending ditemukan", map[string]any{
-			"snapToken":   pendingTransaction.SnapToken,
-			"redirectUrl": pendingTransaction.PaymentUrl,
-			"orderId":     pendingTransaction.OrderId,
-		})
-	}
-
 	// Generate order ID unik yang akan dikirim ke Midtrans
 	orderId := fmt.Sprintf("ORDER-%s-%s", packageId[:8], utils.GenerateId()[:8])
 
-	// Map metode pembayaran user ke format enabled_payments Midtrans
-	// Referensi kode Midtrans Snap:
-	//   gopay     → e-wallet GoPay
-	//   qris      → QR code (Dana, OVO via QRIS)
-	//   bca_va    → Virtual Account BCA
-	//   echannel  → Mandiri Bill (Virtual Account Mandiri)
+	// Map metode pembayaran user ke kode enabled_payments Midtrans Snap.
+	//
+	// Kode Snap untuk Virtual Account (langsung tersedia tanpa aktivasi khusus):
+	//   bca_va   → Virtual Account BCA
+	//   echannel → Mandiri Bill (kode khusus Mandiri di Midtrans)
+	//   bri_va   → Virtual Account BRI
+	//   bni_va   → Virtual Account BNI
+	//
+	// Kode Snap untuk e-wallet (perlu aktivasi di Midtrans Dashboard):
+	//   gopay    → GoPay
 	var enabledPayments []string
 	var midtransPaymentMethod string
 	switch method {
 	case "gopay":
 		enabledPayments = []string{"gopay"}
 		midtransPaymentMethod = "gopay"
-	case "dana":
-		enabledPayments = []string{"qris"}
-		midtransPaymentMethod = "qris"
-	case "ovo":
-		enabledPayments = []string{"qris"}
-		midtransPaymentMethod = "qris"
 	case "bca_va":
 		enabledPayments = []string{"bca_va"}
 		midtransPaymentMethod = "bank_transfer"
 	case "mandiri":
-		// Mandiri menggunakan "echannel" di Midtrans (Mandiri Bill)
 		enabledPayments = []string{"echannel"}
 		midtransPaymentMethod = "echannel"
+	case "bri_va":
+		enabledPayments = []string{"bri_va"}
+		midtransPaymentMethod = "bank_transfer"
+	case "bni_va":
+		enabledPayments = []string{"bni_va"}
+		midtransPaymentMethod = "bank_transfer"
 	default:
-		enabledPayments = nil // tampilkan semua metode
+		enabledPayments = nil
 		midtransPaymentMethod = "unknown"
 	}
 
@@ -239,6 +225,95 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		"redirectUrl": snapResp.RedirectURL,
 		"orderId":     orderId,
 	})
+}
+
+// ─── GetPending ──────────────────────────────────────────────────────────────
+
+// GetPending mengecek apakah user punya transaksi pending untuk paket tertentu.
+// Dipanggil saat PaymentFlowScreen pertama kali dibuka.
+func (r *PaymentController) GetPending(ctx http.Context) http.Response {
+	packageId := ctx.Request().Route("package_id")
+	if packageId == "" {
+		return utils.BadRequest(ctx, "Package ID tidak ditemukan", nil)
+	}
+
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	var transaction models.Transaction
+	facades.Orm().Query().
+		Where("user_id", user.Id).
+		Where("quiz_package_id", packageId).
+		Where("status", "pending").
+		Order("created_at DESC").
+		First(&transaction)
+
+	if transaction.Id == "" {
+		return utils.Ok(ctx, "Tidak ada transaksi pending", map[string]any{
+			"hasPending": false,
+		})
+	}
+
+	return utils.Ok(ctx, "Ada transaksi pending", map[string]any{
+		"hasPending": true,
+		"transaction": map[string]any{
+			"orderId":       transaction.OrderId,
+			"snapToken":     transaction.SnapToken,
+			"redirectUrl":   transaction.PaymentUrl,
+			"amount":        transaction.Amount,
+			"currency":      transaction.Currency,
+			"paymentMethod": transaction.PaymentMethod,
+			"createdAt":     transaction.CreatedAt,
+		},
+	})
+}
+
+// ─── CancelPendingTransaction ─────────────────────────────────────────────────
+
+// CancelPendingTransaction membatalkan transaksi pending milik user.
+// Dipanggil ketika user memilih "Ganti Metode Pembayaran".
+func (r *PaymentController) CancelPendingTransaction(ctx http.Context) http.Response {
+	orderId := ctx.Request().Route("order_id")
+	if orderId == "" {
+		return utils.BadRequest(ctx, "Order ID tidak ditemukan", nil)
+	}
+
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	// Pastikan transaksi ini milik user dan masih pending
+	var transaction models.Transaction
+	errFind := facades.Orm().Query().
+		Where("order_id", orderId).
+		Where("user_id", user.Id).
+		Where("status", "pending").
+		First(&transaction)
+
+	if errFind != nil || transaction.Id == "" {
+		return utils.NotFound(ctx, "Transaksi pending tidak ditemukan", nil)
+	}
+
+	// Batalkan di Midtrans (best effort — abaikan error jika sudah expire)
+	r.midtransService.CancelTransaction(orderId) //nolint:errcheck
+
+	// Update status di tabel transactions
+	facades.Orm().Query().
+		Where("order_id", orderId).
+		Model(&models.Transaction{}).
+		Update("status", "cancel")
+
+	// Hapus record UserPurchasedPackage yang masih is_active=false untuk transaksi ini
+	// agar tidak ada duplikat saat user membuat transaksi baru
+	facades.Orm().Query().
+		Where("transaction_id", transaction.Id).
+		Where("is_active", false).
+		Delete(&models.UserPurchasedPackage{})
+
+	return utils.Ok(ctx, "Transaksi berhasil dibatalkan", nil)
 }
 
 // ─── Notification ─────────────────────────────────────────────────────────────
