@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -86,11 +87,17 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 
 // ─── InitiatePaid ─────────────────────────────────────────────────────────────
 
-// InitiatePaid membuat Midtrans Snap transaction untuk paket berbayar.
+// InitiatePaid membuat transaksi Midtrans Snap untuk paket berbayar.
+// Flow:
+//  1. Validasi request & cek ketersediaan paket
+//  2. Buat Snap transaction di Midtrans → dapat snap_token & redirect_url
+//  3. Simpan Transaction ke DB (status: pending)
+//  4. Simpan UserPurchasedPackage ke DB (is_active: false, transaction_id → ID transaksi)
+//  5. Return snap_token, redirect_url, dan order_id ke frontend
 func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 	data, err := utils.ValidateRequest(ctx, map[string]string{
 		"packageId": "required|min_len:1",
-		"method":    "required|in:dana,gopay,ovo,linkaja,card",
+		"method":    "required|in:dana,gopay,ovo,bca_va,mandiri",
 	})
 	if err != nil {
 		return err.(http.Response)
@@ -104,7 +111,7 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		return errResp
 	}
 
-	// Ambil paket (tanpa filter is_free — bisa paket berbayar)
+	// Ambil paket — tidak filter is_free karena ini untuk paket berbayar
 	quizPackage, errPkg := r.packageService.GetPackageById(packageId, nil)
 	if errPkg != nil {
 		return utils.InternalServerError(ctx, "Internal server error", errPkg)
@@ -122,33 +129,63 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		return utils.BadRequest(ctx, "Paket belum tersedia untuk dibeli", nil)
 	}
 
-	// Cek apakah user sudah membeli paket ini
+	// Cek apakah user sudah memiliki paket ini (aktif)
 	existingPurchase, _ := r.packageService.GetUserPurchasedPackage(user.Id, packageId)
-	if existingPurchase != nil && existingPurchase.Id != "" {
-		return utils.BadRequest(ctx, "Anda sudah membeli paket ini", nil)
+	if existingPurchase != nil && existingPurchase.Id != "" && existingPurchase.IsActive {
+		return utils.BadRequest(ctx, "Anda sudah memiliki paket ini", nil)
 	}
 
-	// Generate order ID yang unik
+	// Cek apakah ada transaksi pending yang belum selesai untuk paket ini
+	var pendingTransaction models.Transaction
+	facades.Orm().Query().
+		Where("user_id", user.Id).
+		Where("quiz_package_id", packageId).
+		Where("status", "pending").
+		First(&pendingTransaction)
+
+	if pendingTransaction.Id != "" {
+		// Kembalikan transaksi pending yang sudah ada alih-alih buat yang baru
+		return utils.Ok(ctx, "Transaksi pending ditemukan", map[string]any{
+			"snapToken":   pendingTransaction.SnapToken,
+			"redirectUrl": pendingTransaction.PaymentUrl,
+			"orderId":     pendingTransaction.OrderId,
+		})
+	}
+
+	// Generate order ID unik yang akan dikirim ke Midtrans
 	orderId := fmt.Sprintf("ORDER-%s-%s", packageId[:8], utils.GenerateId()[:8])
 
-	// Map metode pembayaran ke Midtrans enabled_payments
+	// Map metode pembayaran user ke format enabled_payments Midtrans
+	// Referensi kode Midtrans Snap:
+	//   gopay     → e-wallet GoPay
+	//   qris      → QR code (Dana, OVO via QRIS)
+	//   bca_va    → Virtual Account BCA
+	//   echannel  → Mandiri Bill (Virtual Account Mandiri)
 	var enabledPayments []string
+	var midtransPaymentMethod string
 	switch method {
 	case "gopay":
 		enabledPayments = []string{"gopay"}
+		midtransPaymentMethod = "gopay"
 	case "dana":
 		enabledPayments = []string{"qris"}
+		midtransPaymentMethod = "qris"
 	case "ovo":
 		enabledPayments = []string{"qris"}
-	case "linkaja":
-		enabledPayments = []string{"qris"}
-	case "card":
-		enabledPayments = []string{"credit_card"}
+		midtransPaymentMethod = "qris"
+	case "bca_va":
+		enabledPayments = []string{"bca_va"}
+		midtransPaymentMethod = "bank_transfer"
+	case "mandiri":
+		// Mandiri menggunakan "echannel" di Midtrans (Mandiri Bill)
+		enabledPayments = []string{"echannel"}
+		midtransPaymentMethod = "echannel"
 	default:
-		enabledPayments = []string{"gopay"}
+		enabledPayments = nil // tampilkan semua metode
+		midtransPaymentMethod = "unknown"
 	}
 
-	// Buat Snap transaction ke Midtrans
+	// Panggil Midtrans Snap API untuk membuat transaksi
 	snapResp, errSnap := r.midtransService.CreateSnapTransaction(services.MidtransSnapRequest{
 		OrderId:         orderId,
 		Amount:          int64(quizPackage.Price),
@@ -162,22 +199,42 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		return utils.InternalServerError(ctx, "Gagal membuat transaksi pembayaran", errSnap.Error())
 	}
 
-	// Simpan sebagai pending payment (IsActive = false sampai pembayaran dikonfirmasi)
-	payment := models.UserPurchasedPackage{
+	// ── Simpan transaksi ke DB (status: pending) ──────────────────────────────
+	transaction := models.Transaction{
+		UserId:          user.Id,
+		QuizPackageId:   packageId,
+		OrderId:         orderId,
+		Amount:          quizPackage.Price,
+		Currency:        quizPackage.Currency,
+		PaymentMethod:   midtransPaymentMethod,
+		PaymentProvider: "midtrans",
+		Status:          "pending",
+		SnapToken:       snapResp.Token,
+		PaymentUrl:      snapResp.RedirectURL,
+	}
+
+	errCreateTx := facades.Orm().Query().Create(&transaction)
+	if errCreateTx != nil {
+		return utils.InternalServerError(ctx, "Gagal menyimpan transaksi", errCreateTx)
+	}
+
+	// ── Simpan UserPurchasedPackage sebagai pending (is_active: false) ────────
+	// transaction_id di sini merujuk ke transactions.id (UUID) bukan order_id
+	purchase := models.UserPurchasedPackage{
 		UserId:        user.Id,
 		QuizPackageId: packageId,
-		TransactionId: orderId,
+		TransactionId: transaction.Id, // FK ke transactions.id
 		PurchasedDate: time.Now(),
-		IsActive:      false,
+		IsActive:      false, // akan di-set true setelah payment dikonfirmasi
 		ExpiredDate:   time.Now().AddDate(0, 1, 0),
 	}
 
-	errCreate := facades.Orm().Query().Create(&payment)
-	if errCreate != nil {
-		return utils.InternalServerError(ctx, "Internal server error", errCreate)
+	errCreatePurchase := facades.Orm().Query().Create(&purchase)
+	if errCreatePurchase != nil {
+		return utils.InternalServerError(ctx, "Gagal menyimpan data pembelian", errCreatePurchase)
 	}
 
-	return utils.Ok(ctx, "Berhasil membuat transaksi pembayaran", map[string]any{
+	return utils.Ok(ctx, "Transaksi berhasil dibuat", map[string]any{
 		"snapToken":   snapResp.Token,
 		"redirectUrl": snapResp.RedirectURL,
 		"orderId":     orderId,
@@ -186,66 +243,103 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 
 // ─── Notification ─────────────────────────────────────────────────────────────
 
-// Notification menerima dan memproses webhook notification dari Midtrans.
-// Endpoint ini TIDAK memerlukan autentikasi (dipanggil oleh server Midtrans).
+// Notification menerima webhook POST dari server Midtrans.
+// Endpoint ini TIDAK memerlukan autentikasi (dipanggil oleh Midtrans server).
+//
+// Flow:
+//  1. Parse body notifikasi
+//  2. Verifikasi signature Midtrans
+//  3. Cari Transaction berdasarkan order_id
+//  4. Update status Transaction + simpan raw metadata dari Midtrans
+//  5. Update is_active di UserPurchasedPackage sesuai status
 func (r *PaymentController) Notification(ctx http.Context) http.Response {
-	// Goravel meng-parse JSON body secara otomatis via All()
-	data := ctx.Request().All()
+	// Goravel otomatis parse JSON body via All()
+	rawData := ctx.Request().All()
 
 	// Ekstrak field dari notifikasi Midtrans
-	orderId, _ := data["order_id"].(string)
-	statusCode, _ := data["status_code"].(string)
-	grossAmount, _ := data["gross_amount"].(string)
-	signatureKey, _ := data["signature_key"].(string)
-	transactionStatus, _ := data["transaction_status"].(string)
-	transactionId, _ := data["transaction_id"].(string)
-	paymentType, _ := data["payment_type"].(string)
-	fraudStatus, _ := data["fraud_status"].(string)
+	orderId, _ := rawData["order_id"].(string)
+	statusCode, _ := rawData["status_code"].(string)
+	grossAmount, _ := rawData["gross_amount"].(string)
+	signatureKey, _ := rawData["signature_key"].(string)
+	transactionStatus, _ := rawData["transaction_status"].(string)
+	midtransTransactionId, _ := rawData["transaction_id"].(string)
+	paymentType, _ := rawData["payment_type"].(string)
+	fraudStatus, _ := rawData["fraud_status"].(string)
 
-	notification := services.MidtransTransactionStatus{
-		OrderId:           orderId,
-		TransactionId:     transactionId,
-		TransactionStatus: transactionStatus,
-		StatusCode:        statusCode,
-		GrossAmount:       grossAmount,
-		PaymentType:       paymentType,
-		SignatureKey:      signatureKey,
-		FraudStatus:       fraudStatus,
-	}
-
-	// Validasi bahwa order_id tidak kosong
-	if notification.OrderId == "" {
+	if orderId == "" {
 		return utils.BadRequest(ctx, "Order ID tidak ditemukan dalam notifikasi", nil)
 	}
 
-	// Verifikasi signature untuk memastikan notifikasi berasal dari Midtrans
-	if !r.midtransService.VerifyNotificationSignature(
-		notification.OrderId,
-		notification.StatusCode,
-		notification.GrossAmount,
-		notification.SignatureKey,
-	) {
+	// Verifikasi bahwa notifikasi benar-benar dari Midtrans
+	if !r.midtransService.VerifyNotificationSignature(orderId, statusCode, grossAmount, signatureKey) {
 		return utils.BadRequest(ctx, "Signature tidak valid", nil)
 	}
 
-	// Proses berdasarkan status transaksi
-	switch notification.TransactionStatus {
+	// Cari transaksi berdasarkan order_id
+	var transaction models.Transaction
+	errFind := facades.Orm().Query().Where("order_id", orderId).First(&transaction)
+	if errFind != nil || transaction.Id == "" {
+		// Transaksi tidak ditemukan — tidak perlu error, cukup log dan return OK
+		// (Midtrans kadang kirim notifikasi untuk transaksi yang sudah dihapus)
+		return utils.Ok(ctx, "OK", nil)
+	}
+
+	// Serialize seluruh payload Midtrans sebagai metadata (untuk audit)
+	metadataBytes, _ := json.Marshal(rawData)
+
+	// Tentukan status final dan kapan pembayaran dikonfirmasi
+	newStatus := transactionStatus
+	var paidAt *time.Time
+
+	switch transactionStatus {
 	case "settlement", "capture":
-		// Pembayaran berhasil → aktifkan akses paket
+		// Pembayaran berhasil dikonfirmasi
+		if fraudStatus == "accept" || fraudStatus == "" {
+			now := time.Now()
+			paidAt = &now
+			newStatus = "settlement"
+		} else {
+			// Terdeteksi fraud
+			newStatus = "deny"
+		}
+	case "pending":
+		newStatus = "pending"
+	case "deny", "cancel", "expire", "failure":
+		newStatus = transactionStatus
+	}
+
+	// Update record Transaction di DB
+	updateMap := map[string]any{
+		"status":                   newStatus,
+		"midtrans_transaction_id":  midtransTransactionId,
+		"payment_method":           paymentType,
+		"metadata":                 string(metadataBytes),
+		"updated_at":               time.Now(),
+	}
+	if paidAt != nil {
+		updateMap["paid_at"] = paidAt
+	}
+
+	facades.Orm().Query().
+		Where("order_id", orderId).
+		Model(&models.Transaction{}).
+		Update(updateMap)
+
+	// Update UserPurchasedPackage berdasarkan status pembayaran
+	switch newStatus {
+	case "settlement":
+		// Aktifkan akses paket
 		facades.Orm().Query().
-			Where("transaction_id", notification.OrderId).
+			Where("transaction_id", transaction.Id).
 			Model(&models.UserPurchasedPackage{}).
 			Update("is_active", true)
 
-	case "deny", "cancel", "expire":
-		// Pembayaran gagal/dibatalkan/kadaluarsa → non-aktifkan
+	case "deny", "cancel", "expire", "failure":
+		// Non-aktifkan (jika sempat aktif sebelumnya)
 		facades.Orm().Query().
-			Where("transaction_id", notification.OrderId).
+			Where("transaction_id", transaction.Id).
 			Model(&models.UserPurchasedPackage{}).
 			Update("is_active", false)
-
-	case "pending":
-		// Masih menunggu pembayaran — tidak perlu update
 	}
 
 	return utils.Ok(ctx, "OK", nil)
@@ -254,6 +348,15 @@ func (r *PaymentController) Notification(ctx http.Context) http.Response {
 // ─── CheckStatus ──────────────────────────────────────────────────────────────
 
 // CheckStatus mengecek status pembayaran dari Midtrans dan menyinkronkan ke DB.
+// Dipanggil oleh frontend setelah WebView selesai, sebagai fallback jika
+// webhook Midtrans belum diterima.
+//
+// Flow:
+//  1. Cari Transaction di DB berdasarkan order_id + user_id (verifikasi kepemilikan)
+//  2. Panggil Midtrans Core API untuk status terkini
+//  3. Update Transaction di DB jika status berubah
+//  4. Update UserPurchasedPackage.is_active
+//  5. Return status ke frontend
 func (r *PaymentController) CheckStatus(ctx http.Context) http.Response {
 	orderId := ctx.Request().Route("order_id")
 	if orderId == "" {
@@ -265,44 +368,85 @@ func (r *PaymentController) CheckStatus(ctx http.Context) http.Response {
 		return errResp
 	}
 
-	// Cek kepemilikan: pastikan order ini milik user yang sedang login
-	var purchase models.UserPurchasedPackage
+	// Cari transaksi milik user ini berdasarkan order_id
+	var transaction models.Transaction
 	errFind := facades.Orm().Query().
-		Where("transaction_id", orderId).
+		Where("order_id", orderId).
 		Where("user_id", user.Id).
-		First(&purchase)
+		First(&transaction)
 
-	if errFind != nil || purchase.Id == "" {
+	if errFind != nil || transaction.Id == "" {
 		return utils.NotFound(ctx, "Transaksi tidak ditemukan", nil)
+	}
+
+	// Jika sudah settlement, tidak perlu cek ke Midtrans lagi
+	if transaction.Status == "settlement" {
+		return utils.Ok(ctx, "Pembayaran sudah dikonfirmasi", map[string]any{
+			"orderId":           transaction.OrderId,
+			"transactionStatus": transaction.Status,
+			"paymentMethod":     transaction.PaymentMethod,
+			"amount":            transaction.Amount,
+			"currency":          transaction.Currency,
+			"paidAt":            transaction.PaidAt,
+		})
 	}
 
 	// Tanya Midtrans untuk status terkini
 	status, errStatus := r.midtransService.CheckTransactionStatus(orderId)
 	if errStatus != nil {
-		return utils.InternalServerError(ctx, "Gagal mengecek status pembayaran", errStatus.Error())
+		return utils.InternalServerError(ctx, "Gagal mengecek status pembayaran ke Midtrans", errStatus.Error())
 	}
 
-	// Sinkronisasi status ke DB
-	switch status.TransactionStatus {
-	case "settlement", "capture":
-		facades.Orm().Query().
-			Where("transaction_id", orderId).
-			Model(&models.UserPurchasedPackage{}).
-			Update("is_active", true)
+	// Tentukan apakah status berubah dan perlu update DB
+	if status.TransactionStatus != transaction.Status {
+		var paidAt *time.Time
+		newStatus := status.TransactionStatus
 
-	case "deny", "cancel", "expire":
+		if newStatus == "settlement" || newStatus == "capture" {
+			now := time.Now()
+			paidAt = &now
+			newStatus = "settlement"
+		}
+
+		updateMap := map[string]any{
+			"status":                  newStatus,
+			"midtrans_transaction_id": status.TransactionId,
+			"payment_method":          status.PaymentType,
+			"updated_at":              time.Now(),
+		}
+		if paidAt != nil {
+			updateMap["paid_at"] = paidAt
+		}
+
 		facades.Orm().Query().
-			Where("transaction_id", orderId).
-			Model(&models.UserPurchasedPackage{}).
-			Update("is_active", false)
+			Where("order_id", orderId).
+			Model(&models.Transaction{}).
+			Update(updateMap)
+
+		// Sinkronisasi UserPurchasedPackage
+		switch newStatus {
+		case "settlement":
+			facades.Orm().Query().
+				Where("transaction_id", transaction.Id).
+				Model(&models.UserPurchasedPackage{}).
+				Update("is_active", true)
+		case "deny", "cancel", "expire", "failure":
+			facades.Orm().Query().
+				Where("transaction_id", transaction.Id).
+				Model(&models.UserPurchasedPackage{}).
+				Update("is_active", false)
+		}
+
+		transaction.Status = newStatus
+		transaction.PaymentMethod = status.PaymentType
 	}
 
 	return utils.Ok(ctx, "Status pembayaran berhasil diambil", map[string]any{
-		"orderId":           status.OrderId,
-		"transactionId":     status.TransactionId,
-		"transactionStatus": status.TransactionStatus,
-		"paymentType":       status.PaymentType,
-		"grossAmount":       status.GrossAmount,
-		"fraudStatus":       status.FraudStatus,
+		"orderId":           transaction.OrderId,
+		"transactionStatus": transaction.Status,
+		"paymentMethod":     transaction.PaymentMethod,
+		"amount":            transaction.Amount,
+		"currency":          transaction.Currency,
+		"paidAt":            transaction.PaidAt,
 	})
 }
