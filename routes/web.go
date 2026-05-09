@@ -41,6 +41,8 @@ func Web() {
 	api.Post("/auth/register", authController.Register)
 	api.Post("/auth/login", authController.Login)
 	api.Middleware(middleware.Auth()).Get("/auth/me", authController.Me)
+	api.Middleware(middleware.Auth()).Put("/auth/profile", authController.UpdateProfile)
+	api.Middleware(middleware.Auth()).Post("/auth/profile/avatar", authController.UploadAvatar)
 
 	// ─── QUIZZES ──────────────────────────────────────────────────────────────
 	api.Middleware(middleware.Auth()).Get("/quizzes", quizController.Index)

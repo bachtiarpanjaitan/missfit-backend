@@ -4,6 +4,8 @@ import (
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/utils"
+	"os"
+	"strings"
 	"time"
 
 	"missfit/app/services"
@@ -168,4 +170,130 @@ func (r *AuthController) Me(ctx http.Context) http.Response {
 		"user":  user,
 		"token": ctx.Request().Header("Authorization"),
 	})
+}
+
+func (r *AuthController) UpdateProfile(ctx http.Context) http.Response {
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	all := ctx.Request().All()
+
+	updateData := map[string]any{}
+
+	if name, ok := all["Name"]; ok && name != "" {
+		updateData["name"] = name
+	}
+	if bio, ok := all["Bio"]; ok && bio != "" {
+		updateData["bio"] = bio
+	}
+	if phone, ok := all["Phone"]; ok && phone != "" {
+		updateData["phone"] = phone
+	}
+	if gender, ok := all["Gender"]; ok && gender != "" {
+		updateData["gender"] = gender
+	}
+
+	// Coba juga key lowercase (fallback untuk JSON body)
+	if len(updateData) == 0 {
+		if name, ok := all["name"]; ok && name != "" {
+			updateData["name"] = name
+		}
+		if bio, ok := all["bio"]; ok && bio != "" {
+			updateData["bio"] = bio
+		}
+		if phone, ok := all["phone"]; ok && phone != "" {
+			updateData["phone"] = phone
+		}
+		if gender, ok := all["gender"]; ok && gender != "" {
+			updateData["gender"] = gender
+		}
+	}
+
+	if len(updateData) == 0 {
+		return utils.BadRequest(ctx, "Tidak ada data yang diperbarui", nil)
+	}
+
+	updateData["updated_at"] = time.Now()
+
+	_, err := facades.Orm().Query().Model(&models.User{}).Where("id", user.Id).Update(updateData)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Gagal memperbarui profil", err.Error())
+	}
+
+	var updatedUser models.User
+	if err := facades.Orm().Query().Where("id", user.Id).First(&updatedUser); err != nil {
+		return utils.InternalServerError(ctx, "Gagal mengambil data profil terbaru", err.Error())
+	}
+
+	return utils.Ok(ctx, "Profil berhasil diperbarui", updatedUser)
+}
+
+func (r *AuthController) UploadAvatar(ctx http.Context) http.Response {
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	fileObj, err := ctx.Request().File("avatar")
+	if err != nil {
+		return utils.BadRequest(ctx, "File avatar tidak ditemukan", nil)
+	}
+
+	ext := strings.ToLower(fileObj.GetClientOriginalExtension())
+	if ext == "" {
+		ext = "jpg"
+	}
+
+	allowedExts := map[string]bool{
+		"jpg":  true,
+		"jpeg": true,
+		"png":  true,
+		"webp": true,
+	}
+	if !allowedExts[ext] {
+		return utils.BadRequest(ctx, "Format file tidak didukung. Gunakan jpg, jpeg, png, atau webp", nil)
+	}
+
+	// Size() mengembalikan (int64, error) di Goravel v1.17
+	fileSize, sizeErr := fileObj.Size()
+	if sizeErr != nil {
+		return utils.InternalServerError(ctx, "Gagal memeriksa ukuran file", sizeErr.Error())
+	}
+	if fileSize > 5*1024*1024 {
+		return utils.BadRequest(ctx, "Ukuran file maksimum 5MB", nil)
+	}
+
+	if err := os.MkdirAll("./public/uploads/avatar", 0755); err != nil {
+		return utils.InternalServerError(ctx, "Gagal menyiapkan direktori upload", err.Error())
+	}
+
+	filename := utils.GenerateId() + "." + ext
+
+	// File() di Goravel v1.17 mengembalikan path string ke file sementara
+	tmpPath := fileObj.File()
+
+	content, readErr := os.ReadFile(tmpPath)
+	if readErr != nil {
+		return utils.InternalServerError(ctx, "Gagal membaca konten file", readErr.Error())
+	}
+
+	if err := os.WriteFile("./public/uploads/avatar/"+filename, content, 0644); err != nil {
+		return utils.InternalServerError(ctx, "Gagal menyimpan file avatar", err.Error())
+	}
+
+	appUrl := facades.Config().GetString("app.url")
+	avatarURL := appUrl + "/public/uploads/avatar/" + filename
+
+	_, dbErr := facades.Orm().Query().Model(&models.User{}).Where("id", user.Id).Update("avatar_url", avatarURL)
+	if dbErr != nil {
+		// Hapus file yang sudah tersimpan jika update DB gagal
+		_ = os.Remove("./public/uploads/avatar/" + filename)
+		return utils.InternalServerError(ctx, "Gagal memperbarui foto profil di database", dbErr.Error())
+	}
+
+	user.AvatarURL = avatarURL
+
+	return utils.Ok(ctx, "Foto profil berhasil diperbarui", user)
 }
