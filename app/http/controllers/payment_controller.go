@@ -180,6 +180,7 @@ func (r *PaymentController) InitiatePaid(ctx http.Context) http.Response {
 		UserName:        user.Name,
 		UserEmail:       user.Email,
 		EnabledPayments: enabledPayments,
+		UserPhone:       user.Phone,
 	})
 	if errSnap != nil {
 		return utils.InternalServerError(ctx, "Gagal membuat transaksi pembayaran", errSnap.Error())
@@ -385,11 +386,11 @@ func (r *PaymentController) Notification(ctx http.Context) http.Response {
 
 	// Update record Transaction di DB
 	updateMap := map[string]any{
-		"status":                   newStatus,
-		"midtrans_transaction_id":  midtransTransactionId,
-		"payment_method":           paymentType,
-		"metadata":                 string(metadataBytes),
-		"updated_at":               time.Now(),
+		"status":                  newStatus,
+		"midtrans_transaction_id": midtransTransactionId,
+		"payment_method":          paymentType,
+		"metadata":                string(metadataBytes),
+		"updated_at":              time.Now(),
 	}
 	if paidAt != nil {
 		updateMap["paid_at"] = paidAt

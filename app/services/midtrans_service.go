@@ -30,6 +30,7 @@ type MidtransSnapRequest struct {
 	PackageTitle    string
 	UserName        string
 	UserEmail       string
+	UserPhone       string
 	EnabledPayments []string // e.g. ["gopay"], ["bca_va"], ["echannel"]
 
 	// FinishCallbackUrl adalah URL yang digunakan WebView mobile untuk mendeteksi
@@ -179,6 +180,13 @@ func (s *MidtransService) CreateSnapTransaction(req MidtransSnapRequest) (*Midtr
 		"customer_details": map[string]any{
 			"first_name": req.UserName,
 			"email":      req.UserEmail,
+			"phone":      req.UserPhone,
+			"billing_address": map[string]any{
+				"first_name":   req.UserName,
+				"email":        req.UserEmail,
+				"phone":        req.UserPhone,
+				"country_code": "IDN",
+			},
 		},
 		// Callback URL untuk redirect WebView setelah pembayaran.
 		// Gunakan nilai default jika tidak diisi.
