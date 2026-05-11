@@ -4,8 +4,8 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-
-        <title>Missfit API</title>
+        <link rel="icon" type="image/png" sizes="32x32" href="/public/icon.png" />
+        <title>Miss fit API</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -19,10 +19,11 @@
     <body class="antialiased">
         <div class="relative sm:flex sm:justify-center sm:items-center min-h-screen bg-dots-darker bg-center bg-gray-100 dark:bg-dots-lighter dark:bg-gray-900 selection:bg-red-500 selection:text-white">
             <div class="max-w-7xl mx-auto p-6 lg:p-8">
-                <div class="flex justify-center mt-16 px-0 sm:items-center sm:justify-between">
-                    <div class="ml-4 text-center text-sm text-gray-500 dark:text-gray-400 sm:text-right sm:ml-0">
-                        MissFit Backend {{ .version }}
+                <div class="justify-center mt-16 px-0 sm:items-center sm:justify-between">
+                    <div class="flex justify-center ml-4 text-center text-gray-500 dark:text-gray-400 sm:ml-0" style="font-size: 48px">
+                        <p class="text-md">Miss Fit API v{{ .version }}</p>
                     </div>
+                    <div class="flex justify-center dark:text-gray-400"><a href="/privacy-policy">Kebijakan Privasi</a></div>
                 </div>
             </div>
         </div>

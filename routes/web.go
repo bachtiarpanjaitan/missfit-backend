@@ -14,6 +14,12 @@ func Web() {
 	// halaman default (biarin aja kalau masih butuh)
 	facades.Route().Get("/", func(ctx http.Context) http.Response {
 		return ctx.Response().View().Make("welcome.tmpl", map[string]any{
+			"version": facades.Config().Get("app.version"),
+			"image":   facades.Http().BaseUrl("icon.png"),
+		})
+	})
+	facades.Route().Get("/privacy-policy", func(ctx http.Context) http.Response {
+		return ctx.Response().View().Make("privacypolicy.tmpl", map[string]any{
 			"version": support.Version,
 		})
 	})
