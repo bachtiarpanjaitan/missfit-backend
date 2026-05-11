@@ -21,6 +21,7 @@ type PackageServiceInterface interface {
 	GetGlobalRankings(limit int) (*[]dtos.Ranking, error)
 	GetMyRank(packageId string) (*dtos.Ranking, error)
 	GetPackageRank(packageId string) (map[string][]dtos.Ranking, error)
+	GetPurchaseHistory(userId string, pagination dtos.PaginationParams) ([]dtos.PurchaseHistoryItem, int64, error)
 }
 
 type PackageService struct {
@@ -438,4 +439,50 @@ func (s *PackageService) GetPackageRank(packageId string) (map[string][]dtos.Ran
 	result[packageId] = rankings
 
 	return result, nil
+}
+
+// GetPurchaseHistory mengambil riwayat pembelian paket berbayar milik user.
+// Data diambil dari tabel transactions JOIN quiz_packages.
+// Return: items, totalCount, error
+func (s *PackageService) GetPurchaseHistory(userId string, pagination dtos.PaginationParams) ([]dtos.PurchaseHistoryItem, int64, error) {
+	var items []dtos.PurchaseHistoryItem
+	offset := (pagination.Page - 1) * pagination.Limit
+
+	// Hitung total data untuk informasi pagination
+	var totalCount int64
+	countErr := facades.Orm().Query().Raw(`
+		SELECT COUNT(*) FROM transactions WHERE user_id = ?
+	`, userId).Scan(&totalCount)
+	if countErr != nil {
+		return nil, 0, countErr
+	}
+
+	err := facades.Orm().Query().Raw(`
+		SELECT
+			t.id as transaction_id,
+			t.order_id,
+			t.quiz_package_id as package_id,
+			COALESCE(qp.title, 'Paket Dihapus') as package_title,
+			t.amount,
+			t.currency,
+			t.payment_method,
+			t.status,
+			t.created_at as purchased_date,
+			t.paid_at
+		FROM transactions t
+		LEFT JOIN quiz_packages qp ON qp.id = t.quiz_package_id
+		WHERE t.user_id = ?
+		ORDER BY t.created_at DESC
+		LIMIT ? OFFSET ?
+	`, userId, pagination.Limit, offset).Scan(&items)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if items == nil {
+		items = []dtos.PurchaseHistoryItem{}
+	}
+
+	return items, totalCount, nil
 }

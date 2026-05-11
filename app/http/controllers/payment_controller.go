@@ -532,3 +532,28 @@ func (r *PaymentController) CheckStatus(ctx http.Context) http.Response {
 		"paidAt":            transaction.PaidAt,
 	})
 }
+
+// ─── PurchaseHistory ──────────────────────────────────────────────────────────
+
+// PurchaseHistory mengembalikan riwayat pembelian paket berbayar milik user.
+// Mendukung pagination via query params: _page, _limit, _sort, _order.
+func (r *PaymentController) PurchaseHistory(ctx http.Context) http.Response {
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	pagination := utils.ParsePagination(ctx)
+
+	items, totalCount, err := r.packageService.GetPurchaseHistory(user.Id, pagination)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Gagal mengambil riwayat pembelian", err.Error())
+	}
+
+	return utils.Ok(ctx, "Riwayat pembelian berhasil diambil", map[string]any{
+		"items":      items,
+		"totalCount": totalCount,
+		"page":       pagination.Page,
+		"limit":      pagination.Limit,
+	})
+}

@@ -71,6 +71,9 @@ func Web() {
 	// Batalkan transaksi pending (saat user mau ganti metode pembayaran)
 	api.Middleware(middleware.Auth()).Post("/payments/cancel-transaction/:order_id", paymentController.CancelPendingTransaction)
 
+	// Riwayat pembelian paket berbayar milik user
+	api.Middleware(middleware.Auth()).Get("/payments/history", paymentController.PurchaseHistory)
+
 	// ─── RANKINGS ─────────────────────────────────────────────────────────────
 	api.Middleware(middleware.Auth()).Get("/rankings/global", rankingController.GlobalRankings)
 	api.Middleware(middleware.Auth()).Get("/rankings/package/:package_id", rankingController.PackageRank)
