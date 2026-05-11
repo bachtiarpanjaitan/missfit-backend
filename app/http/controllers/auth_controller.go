@@ -297,3 +297,63 @@ func (r *AuthController) UploadAvatar(ctx http.Context) http.Response {
 
 	return utils.Ok(ctx, "Foto profil berhasil diperbarui", user)
 }
+
+// ─── ChangePassword ───────────────────────────────────────────────────────────
+
+// ChangePassword memungkinkan user mengganti password mereka.
+// Memerlukan: current_password, new_password, confirm_password.
+func (r *AuthController) ChangePassword(ctx http.Context) http.Response {
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	data, err := utils.ValidateRequest(ctx, map[string]string{
+		"current_password": "required|min_len:8",
+		"new_password":     "required|min_len:8",
+		"confirm_password": "required|min_len:8",
+	})
+	if err != nil {
+		return err.(http.Response)
+	}
+
+	currentPassword := data["current_password"].(string)
+	newPassword := data["new_password"].(string)
+	confirmPassword := data["confirm_password"].(string)
+
+	// Validasi: password baru dan konfirmasi harus sama
+	if newPassword != confirmPassword {
+		return utils.BadRequest(ctx, "Password baru dan konfirmasi password tidak sama", nil)
+	}
+
+	// Validasi: password baru tidak boleh sama dengan password lama
+	if currentPassword == newPassword {
+		return utils.BadRequest(ctx, "Password baru tidak boleh sama dengan password lama", nil)
+	}
+
+	// Ambil user dari DB untuk mendapatkan hash password (karena model dari context mungkin tidak include password)
+	var dbUser models.User
+	dbErr := facades.Orm().Query().Where("id", user.Id).First(&dbUser)
+	if dbErr != nil || dbUser.Id == "" {
+		return utils.InternalServerError(ctx, "Gagal mengambil data pengguna", nil)
+	}
+
+	// Verifikasi password lama
+	if errBcrypt := bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(currentPassword)); errBcrypt != nil {
+		return utils.BadRequest(ctx, "Password lama salah", nil)
+	}
+
+	// Hash password baru
+	hashed, errHash := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if errHash != nil {
+		return utils.InternalServerError(ctx, "Gagal mengenkripsi password", errHash.Error())
+	}
+
+	// Update password di database
+	_, errUpdate := facades.Orm().Query().Model(&models.User{}).Where("id", user.Id).Update("password", string(hashed))
+	if errUpdate != nil {
+		return utils.InternalServerError(ctx, "Gagal memperbarui password", errUpdate.Error())
+	}
+
+	return utils.Ok(ctx, "Password berhasil diperbarui", nil)
+}

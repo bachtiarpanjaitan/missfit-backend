@@ -43,6 +43,7 @@ func Web() {
 	api.Middleware(middleware.Auth()).Get("/auth/me", authController.Me)
 	api.Middleware(middleware.Auth()).Put("/auth/profile", authController.UpdateProfile)
 	api.Middleware(middleware.Auth()).Post("/auth/profile/avatar", authController.UploadAvatar)
+	api.Middleware(middleware.Auth()).Post("/auth/change-password", authController.ChangePassword)
 
 	// ─── QUIZZES ──────────────────────────────────────────────────────────────
 	api.Middleware(middleware.Auth()).Get("/quizzes", quizController.Index)
