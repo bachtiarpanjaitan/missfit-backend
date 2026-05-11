@@ -12,6 +12,7 @@ type QuizPackage struct {
 	Category        string
 	DifficultyLevel string
 	ThumbnailUrl    string
+	EducationLevel  string
 	Price           float64
 	IsFree          bool
 	Currency        string
@@ -28,12 +29,13 @@ type QuizPackage struct {
 
 func (QuizPackage) AllowedFields() map[string]bool {
 	return map[string]bool{
-		"title":       true,
-		"description": true,
-		"category":    true,
-		"is_free":     true,
-		"created_at":  true,
-		"rating":      true,
+		"title":           true,
+		"description":     true,
+		"category":        true,
+		"education_level": true,
+		"is_free":         true,
+		"created_at":      true,
+		"rating":          true,
 	}
 }
 
