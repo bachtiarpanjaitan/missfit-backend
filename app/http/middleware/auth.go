@@ -1,11 +1,10 @@
 package middleware
 
 import (
-	"strings"
-
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/utils"
+	"strings"
 
 	"github.com/goravel/framework/contracts/http"
 )
@@ -49,8 +48,14 @@ func Auth() http.Middleware {
 			return
 		}
 
-		ctx.WithValue(userKey, &user)
+		if user.Id == "" || user.Id == "0" || user.Id == "null" {
+			ctx.Request().AbortWithStatusJson(401, map[string]any{
+				"message": "unauthorized",
+			})
+			return
+		}
 
+		ctx.WithValue(userKey, &user)
 		ctx.Request().Next()
 	}
 }

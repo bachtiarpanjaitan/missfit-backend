@@ -51,8 +51,9 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 	quizPackage, errPkg := r.packageService.GetPackageById(packageId, map[string]any{
 		"is_free": true,
 	})
+
 	if errPkg != nil {
-		return utils.InternalServerError(ctx, "Internal server error", errPkg)
+		return utils.InternalServerError(ctx, errPkg.Error(), errPkg)
 	}
 
 	if quizPackage == nil || quizPackage.Id == "" {
@@ -69,6 +70,11 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 	}
 
 	payment := models.UserPurchasedPackage{
+		Base: models.Base{
+			Id:        utils.GenerateId(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 		UserId:        user.Id,
 		QuizPackageId: packageId,
 		TransactionId: "",
@@ -76,10 +82,10 @@ func (r *PaymentController) InitiateFree(ctx http.Context) http.Response {
 		IsActive:      true,
 		ExpiredDate:   time.Now().AddDate(0, 1, 0),
 	}
-
+	fmt.Println(utils.ToJson(&payment))
 	errCreate := facades.Orm().Query().Create(&payment)
 	if errCreate != nil {
-		return utils.InternalServerError(ctx, "Internal server error", errCreate)
+		return utils.InternalServerError(ctx, errCreate.Error(), errCreate)
 	}
 
 	return utils.Ok(ctx, "Berhasil mendapatkan akses paket gratis", nil)
