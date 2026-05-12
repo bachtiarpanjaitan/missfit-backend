@@ -357,3 +357,63 @@ func (r *AuthController) ChangePassword(ctx http.Context) http.Response {
 
 	return utils.Ok(ctx, "Password berhasil diperbarui", nil)
 }
+
+func (r *AuthController) ViewDeleteAccount(ctx http.Context) http.Response {
+	email := ctx.Request().Route("email")
+	return ctx.Response().View().Make("delete_account.tmpl", map[string]any{
+		"title": "Hapus Akun",
+		"email": email,
+		"id":    utils.GenerateId(),
+	})
+}
+
+func (r *AuthController) DeleteAccount(ctx http.Context) http.Response {
+	rawData := ctx.Request().All()
+	var errMsg string
+	if rawData["id"].(string) != rawData["confirm"].(string) {
+		errMsg = "Data Konfirmasi Salah, Silahkan masukkan data konfirmasi dengan benar."
+	}
+
+	var dbUser models.User
+	dbErr := facades.Orm().Query().Where("email", rawData["email"].(string)).First(&dbUser)
+	if dbErr != nil || dbUser.Id == "" {
+		errMsg = "Pengguna tidak ditemukan"
+		return ctx.Response().View().Make("delete_account.tmpl", map[string]any{
+			"email": rawData["email"].(string),
+			"error": errMsg,
+			"id":    utils.GenerateId(),
+		})
+	}
+
+	if errBcrypt := bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(rawData["password"].(string))); errBcrypt != nil {
+		errMsg = "Password anda tidak benar, masukkan password lama anda."
+		return ctx.Response().View().Make("delete_account.tmpl", map[string]any{
+			"email": rawData["email"].(string),
+			"error": errMsg,
+			"id":    utils.GenerateId(),
+		})
+	}
+
+	if errMsg != "" {
+		return ctx.Response().View().Make("delete_account.tmpl", map[string]any{
+			"email": rawData["email"].(string),
+			"error": errMsg,
+			"id":    utils.GenerateId(),
+		})
+	}
+
+	_, errUpdate := facades.Orm().Query().Model(&models.User{}).Where("id", dbUser.Id).Update(map[string]any{
+		"deleted_at": time.Now(),
+		"is_active":  false,
+	})
+	if errUpdate != nil {
+		errMsg = "Gagal menghapus data pengguna, silakan coba lagi."
+		return ctx.Response().View().Make("delete_account.tmpl", map[string]any{
+			"email": rawData["email"].(string),
+			"error": errMsg,
+			"id":    utils.GenerateId(),
+		})
+	}
+
+	return ctx.Response().View().Make("success_delete_account.tmpl")
+}

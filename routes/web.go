@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/support"
 
@@ -11,6 +13,19 @@ import (
 )
 
 func Web() {
+
+	// Baca konfigurasi Midtrans dari environment
+	midtransServerKey := facades.Config().Env("MIDTRANS_SERVER_KEY", "").(string)
+	midtransEnv := facades.Config().Env("MIDTRANS_ENV", "sandbox").(string)
+	// ─── Services ────────────────────────────────────────────────────────────
+	packageService := services.NewPackageService()
+	midtransService := services.NewMidtransService(midtransServerKey, midtransEnv)
+	// ─── Controllers ─────────────────────────────────────────────────────────
+	authController := controllers.NewAuthController(packageService)
+	quizController := controllers.NewQuizController(packageService)
+	paymentController := controllers.NewPaymentController(packageService, midtransService)
+	rankingController := controllers.NewRankingController(packageService)
+
 	// halaman default (biarin aja kalau masih butuh)
 	facades.Route().Get("/", func(ctx http.Context) http.Response {
 		return ctx.Response().View().Make("welcome.tmpl", map[string]any{
@@ -24,22 +39,11 @@ func Web() {
 		})
 	})
 
+	facades.Route().Get("/delete-account/:email", authController.ViewDeleteAccount)
+	facades.Route().Middleware(middleware.Throttle(3, time.Minute)).Post("/delete-account", authController.DeleteAccount)
+
 	// static file
 	facades.Route().Static("public", "./public")
-
-	// ─── Services ────────────────────────────────────────────────────────────
-	packageService := services.NewPackageService()
-
-	// Baca konfigurasi Midtrans dari environment
-	midtransServerKey := facades.Config().Env("MIDTRANS_SERVER_KEY", "").(string)
-	midtransEnv := facades.Config().Env("MIDTRANS_ENV", "sandbox").(string)
-	midtransService := services.NewMidtransService(midtransServerKey, midtransEnv)
-
-	// ─── Controllers ─────────────────────────────────────────────────────────
-	authController := controllers.NewAuthController(packageService)
-	quizController := controllers.NewQuizController(packageService)
-	paymentController := controllers.NewPaymentController(packageService, midtransService)
-	rankingController := controllers.NewRankingController(packageService)
 
 	api := facades.Route().Prefix("/api")
 

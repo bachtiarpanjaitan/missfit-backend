@@ -1,0 +1,113 @@
+{{ define "delete_account.tmpl" }}
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="icon" type="image/png" sizes="32x32" href="/public/icon.png" />
+        <title>Hapus Akun</title>
+
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 700px;
+                margin: 40px auto;
+                padding: 20px;
+                background: #f9f9f9;
+            }
+
+            .container {
+                background: #fff;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            }
+
+            h1 {
+                margin-bottom: 20px;
+                color: #5d12cdff;
+            }
+
+            label {
+                display: block;
+                margin-top: 15px;
+                font-weight: bold;
+            }
+
+            input {
+                width: 100%;
+                padding: 10px;
+                margin-top: 5px;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+            }
+
+            .email {
+                background: #eee;
+            }
+
+            button {
+                margin-top: 20px;
+                padding: 10px 15px;
+                background: #5d12cdff;
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+            }
+
+            button:hover {
+                background: #5d12cdff;
+            }
+
+            .warning {
+                font-size: 14px;
+                color: #777;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+
+    <body>
+    <div class="container">
+
+        <h1>Hapus Akun</h1>
+
+        <form method="POST" action="/delete-account">
+
+            <!-- email dari parameter URL -->
+            <label>Email</label>
+            <input type="text" name="email" value="{{.email}}" class="email" readonly>
+
+            <!-- password lama -->
+            <label>Password Lama</label>
+            <input type="password" name="password" required>
+
+            <!-- konfirmasi teks -->
+            <label>Masukkan <b style="color: #890303ff">{{.id}}</b> untuk konfirmasi</label>
+            <input type="text" name="confirm" placeholder="" required>
+            <input type="hidden" name="id" value="{{.id}}"> 
+            {{ if .error }}
+                <div style="
+                    background:#ffe5e5;
+                    color:#b00020;
+                    padding:10px;
+                    border-radius:6px;
+                    margin-top:15px;
+                    margin-bottom:15px;
+                    font-size:12
+                ">
+                    {{ .error }}
+                </div>
+            {{ end }}
+            <button type="submit">Hapus Akun</button>
+
+            <div class="warning" style="margin-top:15px;font-size:12">
+                Tindakan ini tidak bisa dibatalkan. Data kamu akan hilang selamanya.
+            </div>
+
+        </form>
+
+    </div>
+    </body>
+</html>
+{{ end }}
