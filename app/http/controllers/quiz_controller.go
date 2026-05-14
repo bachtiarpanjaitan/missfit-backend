@@ -9,6 +9,7 @@ import (
 	"missfit/app/utils"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/goravel/framework/contracts/http"
@@ -262,8 +263,6 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 		})
 	}
 
-	db := facades.Orm()
-
 	packageId := uuid.NewString()
 
 	title, _ := xlsx.GetCellValue("Sheet1", "B1")
@@ -294,7 +293,8 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 
 	quizPackage := models.QuizPackage{
 		Base: models.Base{
-			Id: packageId,
+			Id:        packageId,
+			CreatedAt: time.Now(),
 		},
 
 		Title:           title,
@@ -316,8 +316,11 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 		IsPublished:     isPublished,
 	}
 
-	err = db.Query().Create(&quizPackage)
+	tx, err := facades.DB().BeginTransaction()
+
+	_, err = tx.Table("quiz_packages").Insert(&quizPackage)
 	if err != nil {
+		tx.Rollback()
 		return ctx.Response().Json(http.StatusInternalServerError, http.Json{
 			"message": "Gagal membuat quiz package",
 			"error":   err.Error(),
@@ -365,7 +368,8 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 
 		quizQuestion := models.QuizQuestion{
 			Base: models.Base{
-				Id: quizQuestionId,
+				Id:        quizQuestionId,
+				CreatedAt: time.Now(),
 			},
 
 			QuizPackageId:    packageId,
@@ -379,8 +383,9 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 
 		fmt.Println(utils.ToJson(quizQuestion))
 
-		err = db.Query().Create(&quizQuestion)
+		_, err = tx.Table("quiz_questions").Insert(&quizQuestion)
 		if err != nil {
+			tx.Rollback()
 			return ctx.Response().Json(http.StatusInternalServerError, http.Json{
 				"message": "Gagal insert question",
 				"error":   err.Error(),
@@ -422,7 +427,8 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 
 			quizOption := models.QuizOption{
 				Base: models.Base{
-					Id: uuid.NewString(),
+					Id:        uuid.NewString(),
+					CreatedAt: time.Now(),
 				},
 
 				QuizQuestionId: quizQuestionId,
@@ -432,8 +438,9 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 				IsCorrect:      isCorrect,
 			}
 
-			err = db.Query().Create(&quizOption)
+			_, err = tx.Table("quiz_options").Insert(&quizOption)
 			if err != nil {
+				tx.Rollback()
 				return ctx.Response().Json(http.StatusInternalServerError, http.Json{
 					"message": "Gagal insert option",
 					"error":   err.Error(),
@@ -447,6 +454,7 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 		importedQuestions++
 	}
 
+	tx.Commit()
 	return ctx.Response().Json(http.StatusOK, http.Json{
 		"message":            "Berhasil import quiz",
 		"quiz_package_id":    packageId,
