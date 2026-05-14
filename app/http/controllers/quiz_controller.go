@@ -1,13 +1,18 @@
 package controllers
 
 import (
+	"fmt"
 	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/services"
 	"missfit/app/utils"
+	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/goravel/framework/contracts/http"
+	"github.com/xuri/excelize/v2"
 )
 
 type QuizController struct {
@@ -221,6 +226,230 @@ func (r *QuizController) MyStats(ctx http.Context) http.Response {
 }
 
 func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
-	user := utils.User(ctx)
-	return utils.Ok(ctx, "OK", user)
+	file, err := ctx.Request().File("file")
+	if err != nil {
+		return ctx.Response().Json(http.StatusBadRequest, http.Json{
+			"message": "File wajib diupload",
+			"error":   err.Error(),
+		})
+	}
+
+	xlsx, err := excelize.OpenFile(file.File())
+	if err != nil {
+		return ctx.Response().Json(http.StatusBadRequest, http.Json{
+			"message": "File excel tidak valid",
+			"error":   err.Error(),
+		})
+	}
+	if err != nil {
+		return ctx.Response().Json(http.StatusBadRequest, http.Json{
+			"message": "File excel tidak valid",
+			"error":   err.Error(),
+		})
+	}
+
+	rows, err := xlsx.GetRows("Sheet1")
+	if err != nil {
+		return ctx.Response().Json(http.StatusBadRequest, http.Json{
+			"message": "Sheet1 tidak ditemukan",
+			"error":   err.Error(),
+		})
+	}
+
+	if len(rows) <= 17 {
+		return ctx.Response().Json(http.StatusBadRequest, http.Json{
+			"message": "Data soal kosong",
+		})
+	}
+
+	db := facades.Orm()
+
+	packageId := uuid.NewString()
+
+	title, _ := xlsx.GetCellValue("Sheet1", "B1")
+	description, _ := xlsx.GetCellValue("Sheet1", "B2")
+	category, _ := xlsx.GetCellValue("Sheet1", "B3")
+	educationLevel, _ := xlsx.GetCellValue("Sheet1", "B4")
+	difficulty, _ := xlsx.GetCellValue("Sheet1", "B5")
+	thumbnail, _ := xlsx.GetCellValue("Sheet1", "B6")
+	isFreeStr, _ := xlsx.GetCellValue("Sheet1", "B7")
+	priceStr, _ := xlsx.GetCellValue("Sheet1", "B8")
+	currency, _ := xlsx.GetCellValue("Sheet1", "B9")
+	totalQuestionStr, _ := xlsx.GetCellValue("Sheet1", "B10")
+	durationStr, _ := xlsx.GetCellValue("Sheet1", "B11")
+	passingScoreStr, _ := xlsx.GetCellValue("Sheet1", "B12")
+	maxAttemptsStr, _ := xlsx.GetCellValue("Sheet1", "B13")
+	isPublishedStr, _ := xlsx.GetCellValue("Sheet1", "B14")
+
+	price, _ := strconv.ParseFloat(priceStr, 64)
+
+	isFree := strings.ToLower(isFreeStr) == "true" ||
+		isFreeStr == "1"
+
+	durationMinutes, _ := strconv.Atoi(durationStr)
+	passingScore, _ := strconv.Atoi(passingScoreStr)
+	maxAttempts, _ := strconv.Atoi(maxAttemptsStr)
+	totalQuestion, _ := strconv.Atoi(totalQuestionStr)
+	isPublished, _ := strconv.ParseBool(isPublishedStr)
+
+	quizPackage := models.QuizPackage{
+		Base: models.Base{
+			Id: packageId,
+		},
+
+		Title:           title,
+		Description:     description,
+		Category:        category,
+		DifficultyLevel: difficulty,
+		EducationLevel:  educationLevel,
+		ThumbnailUrl:    thumbnail,
+		Price:           price,
+		IsFree:          isFree,
+		Currency:        currency,
+		DurationMinutes: durationMinutes,
+		PassingScore:    passingScore,
+		MaxAttempts:     maxAttempts,
+		TotalQuestions:  totalQuestion,
+		TotalTaken:      0,
+		AverageScore:    0,
+		Rating:          0.00,
+		IsPublished:     isPublished,
+	}
+
+	err = db.Query().Create(&quizPackage)
+	if err != nil {
+		return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+			"message": "Gagal membuat quiz package",
+			"error":   err.Error(),
+		})
+	}
+
+	importedQuestions := 0
+
+	// mulai dari row 18
+	for i := 17; i < len(rows); i++ {
+		row := rows[i]
+
+		// skip row kosong
+		if len(row) < 10 {
+			continue
+		}
+
+		question := ""
+		if len(row) > 1 {
+			question = strings.TrimSpace(row[1])
+		}
+
+		if question == "" {
+			continue
+		}
+
+		orderNo := 0
+		if len(row) > 3 {
+			orderNo, _ = strconv.Atoi(strings.TrimSpace(row[2]))
+		}
+
+		questionType := "multiple_choice"
+		if len(row) > 4 && row[4] != "" {
+			questionType = row[4]
+		}
+
+		point := 10.0
+		if len(row) > 7 {
+			point, _ = strconv.ParseFloat(strings.TrimSpace(row[7]), 64)
+		}
+
+		quizQuestionId := uuid.NewString()
+		QuestionImageUrl := strings.TrimSpace(row[2])
+		explanation := strings.TrimSpace(row[6])
+
+		quizQuestion := models.QuizQuestion{
+			Base: models.Base{
+				Id: quizQuestionId,
+			},
+
+			QuizPackageId:    packageId,
+			QuestionText:     question,
+			QuestionType:     questionType,
+			QuestionImageUrl: QuestionImageUrl,
+			Point:            point,
+			QuestionOrder:    orderNo,
+			Explanation:      explanation,
+		}
+
+		fmt.Println(utils.ToJson(quizQuestion))
+
+		err = db.Query().Create(&quizQuestion)
+		if err != nil {
+			return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+				"message": "Gagal insert question",
+				"error":   err.Error(),
+				"row":     i + 1,
+			})
+		}
+
+		// option mulai kolom J(index 9)
+		optionOrder := 1
+
+		for col := 9; col < len(row); col += 4 {
+			if col >= len(row) {
+				break
+			}
+
+			optionText := strings.TrimSpace(row[col])
+
+			if optionText == "" {
+				continue
+			}
+
+			isCorrect := false
+
+			// kolom is_correct = col+3
+			if col+3 < len(row) {
+				val := strings.ToLower(strings.TrimSpace(row[col+3]))
+
+				if val == "true" || val == "1" {
+					isCorrect = true
+				}
+			}
+
+			imgUrl := ""
+
+			// kolom image url = col+1
+			if col+3 < len(row) {
+				imgUrl = strings.ToLower(strings.TrimSpace(row[col+1]))
+			}
+
+			quizOption := models.QuizOption{
+				Base: models.Base{
+					Id: uuid.NewString(),
+				},
+
+				QuizQuestionId: quizQuestionId,
+				OptionText:     optionText,
+				OptionImageUrl: imgUrl,
+				OptionOrder:    optionOrder,
+				IsCorrect:      isCorrect,
+			}
+
+			err = db.Query().Create(&quizOption)
+			if err != nil {
+				return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+					"message": "Gagal insert option",
+					"error":   err.Error(),
+					"row":     i + 1,
+				})
+			}
+
+			optionOrder++
+		}
+
+		importedQuestions++
+	}
+
+	return ctx.Response().Json(http.StatusOK, http.Json{
+		"message":            "Berhasil import quiz",
+		"quiz_package_id":    packageId,
+		"imported_questions": importedQuestions,
+	})
 }

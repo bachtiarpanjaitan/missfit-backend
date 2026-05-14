@@ -19,7 +19,7 @@ func (r *M20260409081646QuizQuestion) Up() error {
 		err := facades.Schema().Create("quiz_questions", func(table schema.Blueprint) {
 			table.Uuid("id")
 			table.Uuid("quiz_package_id")
-			table.String("question_text")
+			table.Text("question_text")
 			table.String("question_image_url").Nullable()
 			table.Integer("question_order").Default(0)
 			table.String("question_type").Nullable()
