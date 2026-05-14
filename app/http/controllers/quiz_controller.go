@@ -219,3 +219,8 @@ func (r *QuizController) MyStats(ctx http.Context) http.Response {
 
 	return utils.Ok(ctx, "loaded", userResults)
 }
+
+func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
+	user := utils.User(ctx)
+	return utils.Ok(ctx, "OK", user)
+}
