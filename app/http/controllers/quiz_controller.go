@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"missfit/app/dtos"
 	"missfit/app/facades"
 	"missfit/app/models"
@@ -380,9 +379,6 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 			QuestionOrder:    orderNo,
 			Explanation:      explanation,
 		}
-
-		fmt.Println(utils.ToJson(quizQuestion))
-
 		_, err = tx.Table("quiz_questions").Insert(&quizQuestion)
 		if err != nil {
 			tx.Rollback()
@@ -394,7 +390,7 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 		}
 
 		// option mulai kolom J(index 9)
-		optionOrder := 1
+		// optionOrder := 1
 
 		for col := 9; col < len(row); col += 4 {
 			if col >= len(row) {
@@ -411,9 +407,8 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 
 			// kolom is_correct = col+3
 			if col+3 < len(row) {
-				val := strings.ToLower(strings.TrimSpace(row[col+3]))
-
-				if val == "true" || val == "1" {
+				val := strings.TrimSpace(row[col+3])
+				if val == "YA" || val == "ya" {
 					isCorrect = true
 				}
 			}
@@ -424,6 +419,8 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 			if col+3 < len(row) {
 				imgUrl = strings.ToLower(strings.TrimSpace(row[col+1]))
 			}
+
+			optionOrder, _ := strconv.Atoi(strings.TrimSpace(row[col+2]))
 
 			quizOption := models.QuizOption{
 				Base: models.Base{
@@ -448,7 +445,7 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 				})
 			}
 
-			optionOrder++
+			// optionOrder++
 		}
 
 		importedQuestions++
