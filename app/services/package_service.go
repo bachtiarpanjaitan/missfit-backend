@@ -31,6 +31,76 @@ func NewPackageService() PackageServiceInterface {
 	return &PackageService{}
 }
 
+type quizAttemptScore struct {
+	TotalPoint       float64
+	Percentage       float64
+	IsPassed         bool
+	Status           string
+	TimeTakenSeconds int64
+	CorrectAnswers   int
+	WrongAnswers     int
+	SkipAnswers      int
+}
+
+func quizAnswerMap(answers []dtos.QuizResultAnswer) map[string]string {
+	answerMap := make(map[string]string)
+	for _, answer := range answers {
+		answerMap[answer.QuestionId] = answer.AnswerId
+	}
+	return answerMap
+}
+
+func calculateQuizAttemptScore(pkg *models.QuizPackage, questions []models.QuizQuestion, answers []dtos.QuizResultAnswer, startedAt, completedAt time.Time) quizAttemptScore {
+	answerMap := quizAnswerMap(answers)
+
+	var totalPoint float64
+	var totalWeight float64
+	var correctAnswers int
+	var wrongAnswers int
+	var skipAnswers int
+
+	for _, question := range questions {
+		totalWeight += float64(question.Point)
+		if answerMap[question.Id] == "skipped" {
+			skipAnswers++
+			continue
+		}
+
+		for _, option := range question.Options {
+			if option.IsCorrect && answerMap[question.Id] == option.Id {
+				totalPoint += float64(question.Point)
+				correctAnswers++
+			}
+
+			if option.IsCorrect && answerMap[question.Id] != option.Id {
+				wrongAnswers++
+			}
+		}
+	}
+
+	percentage := float64(0)
+	if totalWeight > 0 {
+		percentage = (totalPoint / totalWeight) * 100
+	}
+
+	isPassed := totalPoint >= float64(pkg.PassingScore)
+	status := "failed"
+	if isPassed {
+		status = "passed"
+	}
+
+	return quizAttemptScore{
+		TotalPoint:       totalPoint,
+		Percentage:       percentage,
+		IsPassed:         isPassed,
+		Status:           status,
+		TimeTakenSeconds: utils.DiffSeconds(startedAt, completedAt),
+		CorrectAnswers:   correctAnswers,
+		WrongAnswers:     wrongAnswers,
+		SkipAnswers:      skipAnswers,
+	}
+}
+
 func (s *PackageService) MyProgress(userId string) (*dtos.UserProgress, error) {
 	return &dtos.UserProgress{}, nil
 }
@@ -94,12 +164,6 @@ func (s *PackageService) GetQuestionsByPackageId(packageId string) (*[]models.Qu
 }
 
 func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *models.User) (*models.UserQuizAttempt, error) {
-	var totalPoint float64 = 0
-	var totalWeight float64 = 0
-	var percentage float64 = 0
-	var is_passed bool = false
-	var time_taken_seconds int64 = utils.DiffSeconds(quizResult.StartedAt, quizResult.CompletedAt)
-	var status string = "pending"
 	pkg, err := s.GetPackageById(quizResult.PackageId, nil)
 	if err != nil {
 		return nil, err
@@ -112,43 +176,10 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 	if err != nil {
 		return nil, err
 	}
-	answer_map := make(map[string]string)
-	for _, answer := range quizResult.Answers {
-		answer_map[answer.QuestionId] = answer.AnswerId
-	}
 
-	var correctAnswers int = 0
-	var wrongAnswers int = 0
-	var skipAnswers int = 0
-	for _, question := range *questions {
-		totalWeight += float64(question.Point)
-		if answer_map[question.Id] == "skipped" {
-			skipAnswers++
-			continue
-		}
-		for _, option := range question.Options {
-			if option.IsCorrect && answer_map[question.Id] == option.Id {
-				totalPoint += float64(question.Point)
-				correctAnswers++
-			}
-
-			if option.IsCorrect {
-				if answer_map[question.Id] != option.Id {
-					wrongAnswers++
-				}
-			}
-		}
-	}
-	// println(utils.ToJson(totalPoint), totalWeight)
-	// panic("stop")
-	percentage = (totalPoint / totalWeight) * 100
-	if totalPoint >= float64(pkg.PassingScore) {
-		is_passed = true
-		status = "passed"
-	} else {
-		is_passed = false
-		status = "failed"
-	}
+	answerMap := quizAnswerMap(quizResult.Answers)
+	score := calculateQuizAttemptScore(pkg, *questions, quizResult.Answers, quizResult.StartedAt, quizResult.CompletedAt)
+	totalPoint := score.TotalPoint
 
 	//db transaction
 	tx, err := facades.DB().BeginTransaction()
@@ -174,15 +205,14 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 		CompletedAt:      utils.ToDate(quizResult.CompletedAt),
 		Score:            quizResult.Score,
 		TotalPoints:      totalPoint,
-		Percentage:       percentage,
-		IsPassed:         &is_passed,
-		TimeTakenSeconds: time_taken_seconds,
-		Status:           status,
-		CorrectAnswers:   correctAnswers,
-		WrongAnswers:     wrongAnswers,
-		SkipAnswers:      skipAnswers,
+		Percentage:       score.Percentage,
+		IsPassed:         &score.IsPassed,
+		TimeTakenSeconds: score.TimeTakenSeconds,
+		Status:           score.Status,
+		CorrectAnswers:   score.CorrectAnswers,
+		WrongAnswers:     score.WrongAnswers,
+		SkipAnswers:      score.SkipAnswers,
 	}
-	var UserQuizAttemptModel models.UserQuizAttempt
 	_, err = tx.Table("user_quiz_attempts").Insert(&quizAttempt)
 	if err != nil {
 		tx.Rollback()
@@ -222,11 +252,7 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 		}
 	}
 
-	UserQuizAttemptModel = models.UserQuizAttempt{}
-	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttemptModel)
-	if quizAttempData != nil {
-		return &UserQuizAttemptModel, nil
-	} else {
+	if latestAttemptModel.Id == "" {
 		user.TotalQuizzesCompleted += 1
 	}
 
@@ -252,11 +278,8 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 		var correct bool = false
 		var point float64 = 0
 
-		// fmt.Println(utils.ToJson(answer_map))
-		// fmt.Println(utils.ToJson(question.Id))
-
 		for _, option := range question.Options {
-			if option.IsCorrect && answer_map[question.Id] == option.Id {
+			if option.IsCorrect && answerMap[question.Id] == option.Id {
 				correct = true
 				point = float64(question.Point)
 			}
@@ -269,7 +292,7 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 				UpdatedAt: time.Now(),
 			},
 			UserQuizAttemptId: quizAttempt.Id,
-			SelectedOptionId:  answer_map[question.Id],
+			SelectedOptionId:  answerMap[question.Id],
 			IsCorrect:         correct,
 			PointsEarned:      point,
 		}
@@ -282,8 +305,17 @@ func (s *PackageService) SubmitQuizResult(quizResult dtos.QuizResult, user *mode
 		}
 	}
 
-	tx.Commit()
-	return &quizAttempt, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	UserQuizAttemptModel := models.UserQuizAttempt{}
+	quizAttempData := facades.Orm().Query().Where("id", quizAttempt.Id).With("QuizPackage").First(&UserQuizAttemptModel)
+	if quizAttempData != nil {
+		return &quizAttempt, nil
+	}
+
+	return &UserQuizAttemptModel, nil
 }
 
 func (s *PackageService) GetUserResults(userId string) ([]dtos.MyQuizResult, error) {
