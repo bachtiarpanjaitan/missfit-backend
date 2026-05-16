@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"encoding/json"
+	"fmt"
 	"missfit/app/facades"
 	"missfit/app/models"
 	"missfit/app/utils"
+	nethttp "net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +20,15 @@ import (
 
 type AuthController struct {
 	packageService services.PackageServiceInterface
+}
+
+type googleTokenInfo struct {
+	Audience      string `json:"aud"`
+	Subject       string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified any    `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }
 
 func NewAuthController(packageService services.PackageServiceInterface) *AuthController {
@@ -161,6 +174,247 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 			},
 		},
 	})
+}
+
+func (r *AuthController) GoogleLogin(ctx http.Context) http.Response {
+	idToken := strings.TrimSpace(ctx.Request().Input("id_token"))
+	if idToken == "" {
+		idToken = strings.TrimSpace(ctx.Request().Input("token"))
+	}
+	if idToken == "" {
+		return utils.BadRequest(ctx, "Token Google wajib diisi", nil)
+	}
+
+	googleUser, err := verifyGoogleIDToken(idToken)
+	if err != nil {
+		return utils.BadRequest(ctx, "Token Google tidak valid", err.Error())
+	}
+
+	var user models.User
+	facades.Orm().Query().
+		Where("auth_provider", "google").
+		Where("auth_provider_id", googleUser.Subject).
+		First(&user)
+
+	if user.Id == "" {
+		facades.Orm().Query().
+			Where("email", googleUser.Email).
+			First(&user)
+	}
+
+	now := time.Now()
+	if user.Id == "" {
+		user = models.User{
+			Name:           googleUser.Name,
+			Email:          googleUser.Email,
+			Username:       generateUniqueGoogleUsername(googleUser.Email, googleUser.Name),
+			Password:       hashedGooglePlaceholderPassword(),
+			AvatarURL:      googleAvatarURL(googleUser.Picture),
+			AuthProvider:   "google",
+			AuthProviderID: googleUser.Subject,
+			IsActive:       true,
+			IsVerified:     true,
+			Role:           "user",
+			LastLoginAt:    &now,
+		}
+
+		if err := facades.Orm().Query().Create(&user); err != nil {
+			return utils.InternalServerError(ctx, "Gagal membuat pengguna Google", err.Error())
+		}
+	} else {
+		if !user.IsActive {
+			return utils.BadRequest(ctx, "Akunmu sedang tidak aktif", nil)
+		}
+
+		updateData := map[string]any{
+			"auth_provider":    "google",
+			"auth_provider_id": googleUser.Subject,
+			"is_verified":      true,
+			"last_login_at":    now,
+		}
+
+		if user.Name == "" && googleUser.Name != "" {
+			updateData["name"] = googleUser.Name
+			user.Name = googleUser.Name
+		}
+
+		if shouldUseGoogleAvatar(user.AvatarURL) && googleUser.Picture != "" {
+			updateData["avatar_url"] = googleUser.Picture
+			user.AvatarURL = googleUser.Picture
+		}
+
+		_, err := facades.Orm().Query().
+			Model(&models.User{}).
+			Where("id", user.Id).
+			Update(updateData)
+		if err != nil {
+			return utils.InternalServerError(ctx, "Gagal memperbarui pengguna Google", err.Error())
+		}
+
+		user.AuthProvider = "google"
+		user.AuthProviderID = googleUser.Subject
+		user.IsVerified = true
+		user.LastLoginAt = &now
+	}
+
+	token, err := utils.GenerateToken(user.Id)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Gagal membuat token", err.Error())
+	}
+
+	return utils.Ok(ctx, "login google success", map[string]any{
+		"token": token,
+		"user":  user,
+	})
+}
+
+func verifyGoogleIDToken(idToken string) (*googleTokenInfo, error) {
+	clientIDs := configuredGoogleClientIDs()
+	if len(clientIDs) == 0 {
+		return nil, fmt.Errorf("GOOGLE_CLIENT_ID atau GOOGLE_CLIENT_IDS belum dikonfigurasi")
+	}
+
+	client := nethttp.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tokenInfo googleTokenInfo
+	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != nethttp.StatusOK {
+		return nil, fmt.Errorf("Google tokeninfo status %d", resp.StatusCode)
+	}
+	if tokenInfo.Subject == "" || tokenInfo.Email == "" {
+		return nil, fmt.Errorf("profil Google tidak lengkap")
+	}
+	if !isGoogleEmailVerified(tokenInfo.EmailVerified) {
+		return nil, fmt.Errorf("email Google belum terverifikasi")
+	}
+	if !isAllowedGoogleAudience(tokenInfo.Audience, clientIDs) {
+		return nil, fmt.Errorf("audience Google tidak sesuai")
+	}
+
+	return &tokenInfo, nil
+}
+
+func configuredGoogleClientIDs() []string {
+	keys := []string{
+		"GOOGLE_CLIENT_IDS",
+		"GOOGLE_CLIENT_ID",
+		"GOOGLE_WEB_CLIENT_ID",
+		"GOOGLE_ANDROID_CLIENT_ID",
+		"GOOGLE_IOS_CLIENT_ID",
+	}
+
+	seen := map[string]bool{}
+	var clientIDs []string
+	for _, key := range keys {
+		raw := strings.TrimSpace(fmt.Sprint(facades.Config().Env(key, "")))
+		for _, value := range strings.Split(raw, ",") {
+			clientID := strings.TrimSpace(value)
+			if clientID == "" || seen[clientID] {
+				continue
+			}
+			seen[clientID] = true
+			clientIDs = append(clientIDs, clientID)
+		}
+	}
+
+	return clientIDs
+}
+
+func isAllowedGoogleAudience(audience string, allowedClientIDs []string) bool {
+	for _, clientID := range allowedClientIDs {
+		if audience == clientID {
+			return true
+		}
+	}
+	return false
+}
+
+func isGoogleEmailVerified(value any) bool {
+	switch verified := value.(type) {
+	case bool:
+		return verified
+	case string:
+		return strings.EqualFold(verified, "true")
+	default:
+		return false
+	}
+}
+
+func generateUniqueGoogleUsername(email string, name string) string {
+	base := googleUsernameBase(email, name)
+	candidate := base
+
+	for i := 0; i < 10; i++ {
+		var existing models.User
+		facades.Orm().Query().Where("username", candidate).First(&existing)
+		if existing.Id == "" {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s%d", base, i+1)
+	}
+
+	id := utils.GenerateId()
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	return base + "_" + id
+}
+
+func googleUsernameBase(email string, name string) string {
+	source := strings.TrimSpace(strings.Split(email, "@")[0])
+	if source == "" {
+		source = name
+	}
+	source = strings.ToLower(source)
+
+	var builder strings.Builder
+	for _, char := range source {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		case char == '_' || char == '.':
+			builder.WriteRune(char)
+		case char == '-' || char == ' ':
+			builder.WriteRune('_')
+		}
+	}
+
+	username := strings.Trim(builder.String(), "._")
+	if len(username) < 3 {
+		username = "user"
+	}
+	return username
+}
+
+func hashedGooglePlaceholderPassword() string {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(utils.GenerateId()), bcrypt.DefaultCost)
+	if err != nil {
+		return ""
+	}
+	return string(hashed)
+}
+
+func googleAvatarURL(picture string) string {
+	if picture != "" {
+		return picture
+	}
+
+	appUrl := facades.Config().GetString("app.url")
+	return appUrl + "/public/uploads/avatar/default.svg"
+}
+
+func shouldUseGoogleAvatar(currentAvatarURL string) bool {
+	return currentAvatarURL == "" || strings.Contains(currentAvatarURL, "/public/uploads/avatar/default.svg")
 }
 
 func (r *AuthController) Me(ctx http.Context) http.Response {
