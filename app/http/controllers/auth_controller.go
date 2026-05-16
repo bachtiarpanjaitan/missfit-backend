@@ -164,7 +164,52 @@ func (r *AuthController) Login(ctx http.Context) http.Response {
 }
 
 func (r *AuthController) Me(ctx http.Context) http.Response {
-	user := utils.User(ctx)
+	user, errResp := utils.AuthUser(ctx)
+	if errResp != nil {
+		return errResp
+	}
+
+	type userQuizProgressSummary struct {
+		TotalPoints           float64 `gorm:"column:total_points"`
+		TotalQuizzesCompleted int64   `gorm:"column:total_quizzes_completed"`
+	}
+
+	var summary userQuizProgressSummary
+	err := facades.Orm().Query().Raw(`
+		SELECT
+			COALESCE(SUM(latest.total_points), 0) AS total_points,
+			COUNT(latest.quiz_package_id) AS total_quizzes_completed
+		FROM (
+			SELECT DISTINCT ON (quiz_package_id)
+				quiz_package_id,
+				COALESCE(total_points, 0) AS total_points
+			FROM user_quiz_attempts
+			WHERE user_id = ?
+				AND deleted_at IS NULL
+				AND completed_at IS NOT NULL
+			ORDER BY quiz_package_id, created_at DESC
+		) latest
+	`, user.Id).Scan(&summary)
+	if err != nil {
+		return utils.InternalServerError(ctx, "Gagal menghitung ulang progress pengguna", err.Error())
+	}
+
+	totalQuizzesCompleted := int(summary.TotalQuizzesCompleted)
+	if user.TotalPoints != summary.TotalPoints || user.TotalQuizzesCompleted != totalQuizzesCompleted {
+		_, err = facades.Orm().Query().
+			Model(&models.User{}).
+			Where("id", user.Id).
+			Update(map[string]any{
+				"total_points":            summary.TotalPoints,
+				"total_quizzes_completed": totalQuizzesCompleted,
+			})
+		if err != nil {
+			return utils.InternalServerError(ctx, "Gagal memperbarui progress pengguna", err.Error())
+		}
+
+		user.TotalPoints = summary.TotalPoints
+		user.TotalQuizzesCompleted = totalQuizzesCompleted
+	}
 
 	return utils.Ok(ctx, "success", map[string]interface{}{
 		"user":  user,
