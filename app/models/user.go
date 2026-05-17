@@ -7,23 +7,25 @@ import (
 type User struct {
 	Base
 
-	Role                  string
-	Name                  string
-	Email                 string `gorm:"unique"`
-	Username              string `gorm:"unique"`
-	Password              string `json:"-"`
-	AvatarURL             string
-	Bio                   *string
-	DateOfBirth           *time.Time
-	Gender                string `json:"gender"`
-	Phone                 string
-	TotalPoints           float64
-	TotalQuizzesCompleted int
-	AuthProvider          string
-	AuthProviderID        string
-	IsVerified            bool
-	IsActive              bool
-	LastLoginAt           *time.Time
+	Role                        string
+	Name                        string
+	Email                       string `gorm:"unique"`
+	Username                    string `gorm:"unique"`
+	Password                    string `json:"-"`
+	AvatarURL                   string
+	Bio                         *string
+	DateOfBirth                 *time.Time
+	Gender                      string `json:"gender"`
+	Phone                       string
+	TotalPoints                 float64
+	TotalQuizzesCompleted       int
+	AuthProvider                string
+	AuthProviderID              string
+	IsVerified                  bool
+	IsActive                    bool
+	LastLoginAt                 *time.Time
+	EmailVerificationToken      string
+	EmailVerificationTokenExpiresAt *time.Time
 }
 
 func (User) AllowedFields() map[string]bool {

@@ -70,34 +70,90 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
-	user := models.User{
-		Name:         name,
-		Email:        email,
-		Username:     username,
-		Password:     string(hashed),
-		Gender:       gender,
-		AuthProvider: "local",
-		IsActive:     true,
-		IsVerified:   false,
-		Role:         "user",
-		Phone:        phone,
-	}
+	// Generate verification token (64 character random string)
+	verificationToken := utils.GenerateId() + utils.GenerateId()
+	// Token expires in 24 hours
+	tokenExpiresAt := time.Now().Add(24 * time.Hour)
 
 	appUrl := facades.Config().GetString("app.url")
 
-	user.AvatarURL = appUrl + "/public/uploads/avatar/default.svg"
+	user := models.User{
+		Name:                         name,
+		Email:                        email,
+		Username:                     username,
+		Password:                     string(hashed),
+		Gender:                       gender,
+		AuthProvider:                 "local",
+		IsActive:                     true,
+		IsVerified:                   false,
+		Role:                         "user",
+		Phone:                        phone,
+		AvatarURL:                    appUrl + "/public/uploads/avatar/default.svg",
+		EmailVerificationToken:       verificationToken,
+		EmailVerificationTokenExpiresAt: &tokenExpiresAt,
+	}
 
 	facades.Orm().Query().Create(&user)
 
-	token, _ := utils.GenerateToken(user.Id)
+	// Send verification email
+	go r.sendVerificationEmail(user)
 
 	return ctx.Response().Json(201, map[string]interface{}{
 		"message": "Berhasil mendaftar, silahkan verifikasi email anda",
 		"data": map[string]interface{}{
-			"token": token,
-			"user":  user,
+			"user": user,
 		},
 	})
+}
+
+// sendVerificationEmail mengirim email verifikasi ke user
+func (r *AuthController) sendVerificationEmail(user models.User) {
+	appUrl := facades.Config().GetString("app.url")
+	verificationLink := fmt.Sprintf("%s/email-verify?token=%s", appUrl, user.EmailVerificationToken)
+
+	// Kirim email menggunakan Goravel Mail
+	mail := facades.Mail()
+
+	// Set from address
+	fromAddress := facades.Config().GetString("mail.from.address")
+	fromName := facades.Config().GetString("mail.from.name")
+
+	// Kirim email sederhana (HTML)
+	subject := "Verifikasi Email - MissFit"
+	body := fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			<title>Verifikasi Email</title>
+		</head>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+				<h2 style="color: #2c3e50;">Verifikasi Email Anda</h2>
+				<p>Halo %s,</p>
+				<p>Terima kasih telah mendaftar di MissFit. Silakan klik link dibawah untuk verifikasi email Anda:</p>
+				<p><a href="%s" style="background: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verifikasi Email</a></p>
+				<p>Atau salin link berikut di browser Anda:</p>
+				<p style="word-break: break-all;">%s</p>
+				<p>Link ini akan kadaluwarsa dalam 24 jam.</p>
+				<p>Jika Anda tidak mendaftar, silakan abaikan email ini.</p>
+				<p>Salam,<br>Tim MissFit</p>
+			</div>
+		</body>
+		</html>
+	`, user.Name, verificationLink, verificationLink)
+
+	// Send email
+	err := mail.To([]string{user.Email}).
+		From(fromName, fromAddress).
+		Subject(subject).
+		Html(body).
+		Send()
+
+	// Log error jika gagal, tapi tidak mengganggu register
+	if err != nil {
+		fmt.Printf("Failed to send verification email to %s: %v\n", user.Email, err)
+	}
 }
 
 func (r *AuthController) Login(ctx http.Context) http.Response {
@@ -715,4 +771,92 @@ func (r *AuthController) DeleteAccount(ctx http.Context) http.Response {
 	}
 
 	return ctx.Response().View().Make("success_delete_account.tmpl")
+}
+
+// ViewEmailVerify menampilkan halaman verifikasi email
+func (r *AuthController) ViewEmailVerify(ctx http.Context) http.Response {
+	token := ctx.Request().Query("token")
+
+	if token == "" {
+		return ctx.Response().View().Make("email_verify_error.tmpl", map[string]any{
+			"error": "Token verifikasi tidak ditemukan",
+		})
+	}
+
+	var user models.User
+	err := facades.Orm().Query().
+		Where("email_verification_token", token).
+		First(&user)
+
+	if err != nil || user.Id == "" {
+		return ctx.Response().View().Make("email_verify_error.tmpl", map[string]any{
+			"error": "Token verifikasi tidak valid atau sudah kadaluwarsa",
+		})
+	}
+
+	// Check if token is expired
+	if user.EmailVerificationTokenExpiresAt != nil && time.Now().After(*user.EmailVerificationTokenExpiresAt) {
+		return ctx.Response().View().Make("email_verify_error.tmpl", map[string]any{
+			"error": "Token verifikasi sudah kadaluwarsa. Silakan daftar ulang.",
+		})
+	}
+
+	// Token valid, verify user
+	_, err = facades.Orm().Query().
+		Model(&models.User{}).
+		Where("id", user.Id).
+		Update(map[string]any{
+			"is_verified":                    true,
+			"email_verification_token":        nil,
+			"email_verification_token_expires_at": nil,
+		})
+
+	if err != nil {
+		return ctx.Response().View().Make("email_verify_error.tmpl", map[string]any{
+			"error": "Gagal memverifikasi akun. Silakan coba lagi.",
+		})
+	}
+
+	return ctx.Response().View().Make("email_verify_success.tmpl", map[string]any{
+		"message": "Email berhasil diverifikasi! Silakan login untuk melanjutkan.",
+	})
+}
+
+// VerifyEmail API endpoint untuk verifikasi email (alternative JSON response)
+func (r *AuthController) VerifyEmail(ctx http.Context) http.Response {
+	token := ctx.Request().Query("token")
+
+	if token == "" {
+		return utils.BadRequest(ctx, "Token verifikasi wajib diisi", nil)
+	}
+
+	var user models.User
+	err := facades.Orm().Query().
+		Where("email_verification_token", token).
+		First(&user)
+
+	if err != nil || user.Id == "" {
+		return utils.BadRequest(ctx, "Token verifikasi tidak valid atau sudah kadaluwarsa", nil)
+	}
+
+	// Check if token is expired
+	if user.EmailVerificationTokenExpiresAt != nil && time.Now().After(*user.EmailVerificationTokenExpiresAt) {
+		return utils.BadRequest(ctx, "Token verifikasi sudah kadaluwarsa. Silakan daftar ulang.", nil)
+	}
+
+	// Token valid, verify user
+	_, err = facades.Orm().Query().
+		Model(&models.User{}).
+		Where("id", user.Id).
+		Update(map[string]any{
+			"is_verified":                    true,
+			"email_verification_token":        nil,
+			"email_verification_token_expires_at": nil,
+		})
+
+	if err != nil {
+		return utils.InternalServerError(ctx, "Gagal memverifikasi akun", err)
+	}
+
+	return utils.Ok(ctx, "Email berhasil diverifikasi", nil)
 }

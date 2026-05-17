@@ -42,6 +42,10 @@ func Web() {
 	facades.Route().Get("/delete-account/:email", authController.ViewDeleteAccount)
 	facades.Route().Middleware(middleware.Throttle(3, time.Minute)).Post("/delete-account", authController.DeleteAccount)
 
+	// Email verification
+	facades.Route().Get("/email-verify", authController.ViewEmailVerify)
+	facades.Route().Get("/api/email-verify", authController.VerifyEmail)
+
 	// static file
 	facades.Route().Static("public", "./public")
 
