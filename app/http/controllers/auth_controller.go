@@ -108,52 +108,52 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 
 // sendVerificationEmail mengirim email verifikasi ke user
 func (r *AuthController) sendVerificationEmail(user models.User) {
-	appUrl := facades.Config().GetString("app.url")
-	verificationLink := fmt.Sprintf("%s/email-verify?token=%s", appUrl, user.EmailVerificationToken)
+	// appUrl := facades.Config().GetString("app.url")
+	// verificationLink := fmt.Sprintf("%s/email-verify?token=%s", appUrl, user.EmailVerificationToken)
 
-	// Kirim email menggunakan Goravel Mail
-	mail := facades.Mail()
+	// // Kirim email menggunakan Goravel Mail
+	// mail := facades.Mail()
 
-	// Set from address
-	fromAddress := facades.Config().GetString("mail.from.address")
-	fromName := facades.Config().GetString("mail.from.name")
+	// // Set from address
+	// fromAddress := facades.Config().GetString("mail.from.address")
+	// fromName := facades.Config().GetString("mail.from.name")
 
-	// Kirim email sederhana (HTML)
-	subject := "Verifikasi Email - MissFit"
-	body := fmt.Sprintf(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="UTF-8">
-			<title>Verifikasi Email</title>
-		</head>
-		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-			<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-				<h2 style="color: #2c3e50;">Verifikasi Email Anda</h2>
-				<p>Halo %s,</p>
-				<p>Terima kasih telah mendaftar di MissFit. Silakan klik link dibawah untuk verifikasi email Anda:</p>
-				<p><a href="%s" style="background: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verifikasi Email</a></p>
-				<p>Atau salin link berikut di browser Anda:</p>
-				<p style="word-break: break-all;">%s</p>
-				<p>Link ini akan kadaluwarsa dalam 24 jam.</p>
-				<p>Jika Anda tidak mendaftar, silakan abaikan email ini.</p>
-				<p>Salam,<br>Tim MissFit</p>
-			</div>
-		</body>
-		</html>
-	`, user.Name, verificationLink, verificationLink)
+	// // Kirim email sederhana (HTML)
+	// subject := "Verifikasi Email - MissFit"
+	// body := fmt.Sprintf(`
+	// 	<!DOCTYPE html>
+	// 	<html>
+	// 	<head>
+	// 		<meta charset="UTF-8">
+	// 		<title>Verifikasi Email</title>
+	// 	</head>
+	// 	<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+	// 		<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+	// 			<h2 style="color: #2c3e50;">Verifikasi Email Anda</h2>
+	// 			<p>Halo %s,</p>
+	// 			<p>Terima kasih telah mendaftar di MissFit. Silakan klik link dibawah untuk verifikasi email Anda:</p>
+	// 			<p><a href="%s" style="background: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verifikasi Email</a></p>
+	// 			<p>Atau salin link berikut di browser Anda:</p>
+	// 			<p style="word-break: break-all;">%s</p>
+	// 			<p>Link ini akan kadaluwarsa dalam 24 jam.</p>
+	// 			<p>Jika Anda tidak mendaftar, silakan abaikan email ini.</p>
+	// 			<p>Salam,<br>Tim MissFit</p>
+	// 		</div>
+	// 	</body>
+	// 	</html>
+	// `, user.Name, verificationLink, verificationLink)
 
 	// Send email
-	err := mail.To([]string{user.Email}).
-		From(fromName, fromAddress).
-		Subject(subject).
-		Html(body).
-		Send()
+	// err := mail.To([]string{user.Email}).
+	// 	From(fromName, fromAddress).
+	// 	Subject(subject).
+	// 	Html(body).
+	// 	Send()
 
 	// Log error jika gagal, tapi tidak mengganggu register
-	if err != nil {
-		fmt.Printf("Failed to send verification email to %s: %v\n", user.Email, err)
-	}
+	// if err != nil {
+	// 	fmt.Printf("Failed to send verification email to %s: %v\n", user.Email, err)
+	// }
 }
 
 func (r *AuthController) Login(ctx http.Context) http.Response {
