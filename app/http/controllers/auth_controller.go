@@ -3,16 +3,16 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
-	"missfit/app/facades"
-	"missfit/app/models"
-	"missfit/app/utils"
+	"lumos/app/facades"
+	"lumos/app/models"
+	"lumos/app/utils"
 	nethttp "net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"missfit/app/services"
+	"lumos/app/services"
 
 	"github.com/goravel/framework/contracts/http"
 	"golang.org/x/crypto/bcrypt"
@@ -78,18 +78,18 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 	appUrl := facades.Config().GetString("app.url")
 
 	user := models.User{
-		Name:                         name,
-		Email:                        email,
-		Username:                     username,
-		Password:                     string(hashed),
-		Gender:                       gender,
-		AuthProvider:                 "local",
-		IsActive:                     true,
-		IsVerified:                   false,
-		Role:                         "user",
-		Phone:                        phone,
-		AvatarURL:                    appUrl + "/public/uploads/avatar/default.svg",
-		EmailVerificationToken:       verificationToken,
+		Name:                            name,
+		Email:                           email,
+		Username:                        username,
+		Password:                        string(hashed),
+		Gender:                          gender,
+		AuthProvider:                    "local",
+		IsActive:                        true,
+		IsVerified:                      false,
+		Role:                            "user",
+		Phone:                           phone,
+		AvatarURL:                       appUrl + "/public/uploads/avatar/default.svg",
+		EmailVerificationToken:          verificationToken,
 		EmailVerificationTokenExpiresAt: &tokenExpiresAt,
 	}
 
@@ -806,8 +806,8 @@ func (r *AuthController) ViewEmailVerify(ctx http.Context) http.Response {
 		Model(&models.User{}).
 		Where("id", user.Id).
 		Update(map[string]any{
-			"is_verified":                    true,
-			"email_verification_token":        nil,
+			"is_verified":                         true,
+			"email_verification_token":            nil,
 			"email_verification_token_expires_at": nil,
 		})
 
@@ -849,8 +849,8 @@ func (r *AuthController) VerifyEmail(ctx http.Context) http.Response {
 		Model(&models.User{}).
 		Where("id", user.Id).
 		Update(map[string]any{
-			"is_verified":                    true,
-			"email_verification_token":        nil,
+			"is_verified":                         true,
+			"email_verification_token":            nil,
 			"email_verification_token_expires_at": nil,
 		})
 

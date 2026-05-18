@@ -3,7 +3,7 @@ package config
 import (
 	"github.com/goravel/framework/support/carbon"
 
-	"missfit/app/facades"
+	"lumos/app/facades"
 )
 
 // Boot Start all init methods of the current folder to bootstrap all config.

@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"missfit/app/models"
+	"lumos/app/models"
 
 	"github.com/goravel/framework/contracts/http"
 )

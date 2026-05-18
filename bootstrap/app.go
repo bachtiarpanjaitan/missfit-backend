@@ -4,8 +4,8 @@ import (
 	contractsfoundation "github.com/goravel/framework/contracts/foundation"
 	"github.com/goravel/framework/foundation"
 
-	"missfit/config"
-	"missfit/routes"
+	"lumos/config"
+	"lumos/routes"
 )
 
 func Boot() contractsfoundation.Application {

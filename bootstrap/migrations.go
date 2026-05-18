@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"github.com/goravel/framework/contracts/database/schema"
 
-	"missfit/database/migrations"
+	"lumos/database/migrations"
 )
 
 func Migrations() []schema.Migration {

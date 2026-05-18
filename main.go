@@ -1,7 +1,7 @@
 package main
 
 import (
-	"missfit/bootstrap"
+	"lumos/bootstrap"
 )
 
 func main() {

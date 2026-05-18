@@ -2,8 +2,8 @@ package utils
 
 import (
 	"context"
-	"missfit/app/facades"
-	"missfit/app/models"
+	"lumos/app/facades"
+	"lumos/app/models"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

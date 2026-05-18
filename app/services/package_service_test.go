@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"missfit/app/dtos"
-	"missfit/app/models"
+	"lumos/app/dtos"
+	"lumos/app/models"
 )
 
 func installMockApp(t *testing.T) *mockfoundation.Application {

@@ -6,10 +6,10 @@ import (
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/support"
 
-	"missfit/app/facades"
-	"missfit/app/http/controllers"
-	"missfit/app/http/middleware"
-	"missfit/app/services"
+	"lumos/app/facades"
+	"lumos/app/http/controllers"
+	"lumos/app/http/middleware"
+	"lumos/app/services"
 )
 
 func Web() {

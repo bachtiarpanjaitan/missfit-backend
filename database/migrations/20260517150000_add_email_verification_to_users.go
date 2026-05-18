@@ -1,9 +1,7 @@
 package migrations
 
 import (
-	"time"
-
-	"missfit/app/facades"
+	"lumos/app/facades"
 
 	"github.com/goravel/framework/contracts/database/schema"
 )

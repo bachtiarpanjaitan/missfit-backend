@@ -3,7 +3,7 @@ package tests
 import (
 	"github.com/goravel/framework/testing"
 
-	"missfit/bootstrap"
+	"lumos/bootstrap"
 )
 
 func init() {

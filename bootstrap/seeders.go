@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"github.com/goravel/framework/contracts/database/seeder"
 
-	"missfit/database/seeders"
+	"lumos/database/seeders"
 )
 
 func Seeders() []seeder.Seeder {

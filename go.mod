@@ -1,4 +1,4 @@
-module missfit
+module lumos
 
 go 1.25.0
 

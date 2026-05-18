@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"missfit/app/dtos"
+	"lumos/app/dtos"
 
 	"github.com/goravel/framework/contracts/http"
 )

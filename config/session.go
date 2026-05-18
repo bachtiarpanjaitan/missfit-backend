@@ -4,7 +4,7 @@ import (
 	"github.com/goravel/framework/support/path"
 	"github.com/goravel/framework/support/str"
 
-	"missfit/app/facades"
+	"lumos/app/facades"
 )
 
 func init() {

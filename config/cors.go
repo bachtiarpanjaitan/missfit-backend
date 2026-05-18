@@ -1,7 +1,7 @@
 package config
 
 import (
-	"missfit/app/facades"
+	"lumos/app/facades"
 )
 
 func init() {

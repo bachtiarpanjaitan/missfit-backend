@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"fmt"
-	"missfit/app/services"
-	"missfit/app/utils"
+	"lumos/app/services"
+	"lumos/app/utils"
 
 	"github.com/goravel/framework/contracts/http"
 )

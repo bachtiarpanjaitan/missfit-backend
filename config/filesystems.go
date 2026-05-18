@@ -3,7 +3,7 @@ package config
 import (
 	"github.com/goravel/framework/support/path"
 
-	"missfit/app/facades"
+	"lumos/app/facades"
 )
 
 func init() {

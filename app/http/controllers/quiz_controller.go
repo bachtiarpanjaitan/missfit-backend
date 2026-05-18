@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"missfit/app/dtos"
-	"missfit/app/facades"
-	"missfit/app/models"
-	"missfit/app/services"
-	"missfit/app/utils"
+	"lumos/app/dtos"
+	"lumos/app/facades"
+	"lumos/app/models"
+	"lumos/app/services"
+	"lumos/app/utils"
 	"strconv"
 	"strings"
 	"time"

@@ -2,8 +2,8 @@ package seeders
 
 import (
 	"fmt"
-	"missfit/app/facades"
-	"missfit/app/models"
+	"lumos/app/facades"
+	"lumos/app/models"
 	"time"
 
 	"github.com/google/uuid"

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"missfit/app/facades"
-	"missfit/app/models"
-	"missfit/app/services"
-	"missfit/app/utils"
+	"lumos/app/facades"
+	"lumos/app/models"
+	"lumos/app/services"
+	"lumos/app/utils"
 
 	"github.com/goravel/framework/contracts/http"
 )

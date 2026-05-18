@@ -1,6 +1,6 @@
 package dtos
 
-import "missfit/app/models"
+import "lumos/app/models"
 
 // QuizPackageResponse membungkus QuizPackage dengan informasi status pembelian user.
 // Digunakan di endpoint /quizzes/all dan /quizzes agar frontend tahu

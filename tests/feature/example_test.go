@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"missfit/tests"
+	"lumos/tests"
 )
 
 type ExampleTestSuite struct {

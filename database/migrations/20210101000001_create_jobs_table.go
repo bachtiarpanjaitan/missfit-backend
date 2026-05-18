@@ -3,7 +3,7 @@ package migrations
 import (
 	"github.com/goravel/framework/contracts/database/schema"
 
-	"missfit/app/facades"
+	"lumos/app/facades"
 )
 
 type M20210101000001CreateJobsTable struct{}

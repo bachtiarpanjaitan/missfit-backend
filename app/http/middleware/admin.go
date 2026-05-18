@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"missfit/app/facades"
-	"missfit/app/models"
-	"missfit/app/utils"
+	"lumos/app/facades"
+	"lumos/app/models"
+	"lumos/app/utils"
 	"strings"
 
 	"github.com/goravel/framework/contracts/http"

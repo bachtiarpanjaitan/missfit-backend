@@ -1,11 +1,11 @@
 package services
 
 import (
+	"lumos/app/dtos"
+	"lumos/app/facades"
+	"lumos/app/models"
+	"lumos/app/utils"
 	"math"
-	"missfit/app/dtos"
-	"missfit/app/facades"
-	"missfit/app/models"
-	"missfit/app/utils"
 	"time"
 )
 
