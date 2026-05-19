@@ -8,7 +8,7 @@ with content
 
 ```
 [Unit]
-Description=Missfit Backend
+Description=IhandLumos Backend
 After=network.target
 
 [Service]

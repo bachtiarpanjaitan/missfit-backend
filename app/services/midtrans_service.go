@@ -44,8 +44,8 @@ type MidtransSnapRequest struct {
 	//
 	// Midtrans akan me-redirect WebView ke URL ini setelah pembayaran.
 	// Boleh pakai pola apapun, contoh:
-	//   "https://payment.missfit.app/finish"  ← pola fiktif (default)
-	//   "missfit://payment/finish"            ← app deep link scheme
+	//   "https://payment.ihandlumos.app/finish"  ← pola fiktif (default)
+	//   "ihandlumos://payment/finish"            ← app deep link scheme
 	FinishCallbackUrl   string
 	UnfinishCallbackUrl string
 	ErrorCallbackUrl    string
@@ -88,9 +88,9 @@ type MidtransTransactionStatus struct {
 // URL default untuk callback WebView. Pola ini dicegat oleh onShouldStartLoadWithRequest
 // di React Native — tidak perlu mengarah ke server nyata.
 const (
-	defaultFinishUrl   = "https://payment.missfit.app/finish"
-	defaultUnfinishUrl = "https://payment.missfit.app/unfinish"
-	defaultErrorUrl    = "https://payment.missfit.app/error"
+	defaultFinishUrl   = "https://payment.ihandlumos.app/finish"
+	defaultUnfinishUrl = "https://payment.ihandlumos.app/unfinish"
+	defaultErrorUrl    = "https://payment.ihandlumos.app/error"
 )
 
 func (r MidtransSnapRequest) finishUrl() string {

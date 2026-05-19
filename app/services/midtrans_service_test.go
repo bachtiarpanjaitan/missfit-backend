@@ -49,14 +49,14 @@ func TestMidtransSnapRequestCallbackURLs(t *testing.T) {
 
 	t.Run("uses custom values", func(t *testing.T) {
 		req := MidtransSnapRequest{
-			FinishCallbackUrl:   "missfit://finish",
-			UnfinishCallbackUrl: "missfit://unfinish",
-			ErrorCallbackUrl:    "missfit://error",
+			FinishCallbackUrl:   "ihandlumos://finish",
+			UnfinishCallbackUrl: "ihandlumos://unfinish",
+			ErrorCallbackUrl:    "ihandlumos://error",
 		}
 
-		assert.Equal(t, "missfit://finish", req.finishUrl())
-		assert.Equal(t, "missfit://unfinish", req.unfinishUrl())
-		assert.Equal(t, "missfit://error", req.errorUrl())
+		assert.Equal(t, "ihandlumos://finish", req.finishUrl())
+		assert.Equal(t, "ihandlumos://unfinish", req.unfinishUrl())
+		assert.Equal(t, "ihandlumos://error", req.errorUrl())
 	})
 }
 
@@ -131,9 +131,9 @@ func TestMidtransServiceCreateSnapTransaction(t *testing.T) {
 
 			assert.Equal(t, []any{"gopay", "bca_va"}, payload["enabled_payments"])
 			callbacks := payload["callbacks"].(map[string]any)
-			assert.Equal(t, "missfit://finish", callbacks["finish"])
-			assert.Equal(t, "missfit://unfinish", callbacks["unfinish"])
-			assert.Equal(t, "missfit://error", callbacks["error"])
+			assert.Equal(t, "ihandlumos://finish", callbacks["finish"])
+			assert.Equal(t, "ihandlumos://unfinish", callbacks["unfinish"])
+			assert.Equal(t, "ihandlumos://error", callbacks["error"])
 
 			return testJSONResponse(http.StatusOK, `{"token":"snap-token","redirect_url":"https://snap.test"}`), nil
 		})
@@ -147,9 +147,9 @@ func TestMidtransServiceCreateSnapTransaction(t *testing.T) {
 			UserEmail:           "user-b@example.com",
 			UserPhone:           "08456",
 			EnabledPayments:     []string{"gopay", "bca_va"},
-			FinishCallbackUrl:   "missfit://finish",
-			UnfinishCallbackUrl: "missfit://unfinish",
-			ErrorCallbackUrl:    "missfit://error",
+			FinishCallbackUrl:   "ihandlumos://finish",
+			UnfinishCallbackUrl: "ihandlumos://unfinish",
+			ErrorCallbackUrl:    "ihandlumos://error",
 		})
 
 		require.NoError(t, err)
