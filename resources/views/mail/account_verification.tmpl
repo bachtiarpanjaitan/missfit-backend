@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Verifikasi Email</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #2c3e50;">Verifikasi Email Anda</h2>
+      <p>Halo {{.name}},</p>
+      <p>Terima kasih telah mendaftar di Ihand Lumos. Silakan klik link dibawah untuk verifikasi email Anda:</p>
+      <p><a href="{{ .verificationLink }}" style="background: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verifikasi Email</a></p>
+      <p>Atau salin link berikut di browser Anda:</p>
+      <p style="word-break: break-all;">{{ .verificationLink }}</p>
+      <p>Link ini akan kadaluwarsa dalam 24 jam.</p>
+      <p>Jika Anda tidak mendaftar, silakan abaikan email ini.</p>
+      <p>Salam,<br>Tim Ihand Lumos</p>
+    </div>
+  </body>
+</html>

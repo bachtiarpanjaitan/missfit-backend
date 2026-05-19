@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"lumos/app/facades"
+	"lumos/app/mails"
 	"lumos/app/models"
+	"lumos/app/services"
 	"lumos/app/utils"
 	nethttp "net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
-
-	"lumos/app/services"
 
 	"github.com/goravel/framework/contracts/http"
 	"golang.org/x/crypto/bcrypt"
@@ -51,11 +51,11 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 	phone := ctx.Request().Input("phone")
 
 	if confirmPassword != password {
-		return ctx.Response().Json(400, "password dan konfirmasi password tidak sama")
+		return utils.BadRequest(ctx, "Password dan konfirmasi password tidak sama", nil)
 	}
 
 	if email == "" || password == "" || username == "" {
-		return ctx.Response().Json(400, "email, username, password wajib")
+		return utils.BadRequest(ctx, "Email, username, password wajib", nil)
 	}
 
 	var existing models.User
@@ -65,7 +65,7 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 		First(&existing)
 
 	if existing.Id != "" {
-		return ctx.Response().Json(400, "username atau email sudah pernah digunakan")
+		return utils.BadRequest(ctx, "Username atau email sudah pernah digunakan", nil)
 	}
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -77,7 +77,13 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 
 	appUrl := facades.Config().GetString("app.url")
 
+	tx, err := facades.DB().BeginTransaction()
+
 	user := models.User{
+		Base: models.Base{
+			Id:        utils.GenerateId(),
+			CreatedAt: time.Now(),
+		},
 		Name:                            name,
 		Email:                           email,
 		Username:                        username,
@@ -93,67 +99,44 @@ func (r *AuthController) Register(ctx http.Context) http.Response {
 		EmailVerificationTokenExpiresAt: &tokenExpiresAt,
 	}
 
-	facades.Orm().Query().Create(&user)
-
 	// Send verification email
-	go r.sendVerificationEmail(user)
+	_, err = tx.Table("users").Insert(&user)
+	if err != nil {
+		tx.Rollback()
+		return utils.InternalServerError(ctx, "Gagal mendaftar, coba lagi", err)
+	}
 
-	return ctx.Response().Json(201, map[string]interface{}{
-		"message": "Berhasil mendaftar, silahkan verifikasi email anda",
-		"data": map[string]interface{}{
-			"user": user,
-		},
-	})
+	err = r.sendVerificationEmail(&user)
+
+	if err != nil {
+		tx.Rollback()
+		facades.Log().Error("Gagal mengirim email verifikasi", err.Error())
+	}
+
+	tx.Commit()
+	return utils.Ok(ctx, "Berhasil mendaftar, silahkan verifikasi email anda", nil)
 }
 
 // sendVerificationEmail mengirim email verifikasi ke user
-func (r *AuthController) sendVerificationEmail(user models.User) {
+func (r *AuthController) sendVerificationEmail(user *models.User) error {
 	appUrl := facades.Config().GetString("app.url")
 	verificationLink := fmt.Sprintf("%s/email-verify?token=%s", appUrl, user.EmailVerificationToken)
 
 	// Kirim email menggunakan Goravel Mail
-	mail := facades.Mail()
+	// err := facades.Mail().Send(&mails.AccountVerification{
+	// 	VerificationLink: verificationLink,
+	// 	User:             *user,
+	// })
+	err := facades.Mail().Queue(&mails.AccountVerification{
+		VerificationLink: verificationLink,
+		User:             *user,
+	})
 
-	// Set from address
-	fromAddress := facades.Config().GetString("mail.from.address")
-	fromName := facades.Config().GetString("mail.from.name")
-
-	// Kirim email sederhana (HTML)
-	subject := "Verifikasi Email - Ihand Lumos"
-	body := fmt.Sprintf(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="UTF-8">
-			<title>Verifikasi Email</title>
-		</head>
-		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-			<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-				<h2 style="color: #2c3e50;">Verifikasi Email Anda</h2>
-				<p>Halo %s,</p>
-				<p>Terima kasih telah mendaftar di Ihand Lumos. Silakan klik link dibawah untuk verifikasi email Anda:</p>
-				<p><a href="%s" style="background: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verifikasi Email</a></p>
-				<p>Atau salin link berikut di browser Anda:</p>
-				<p style="word-break: break-all;">%s</p>
-				<p>Link ini akan kadaluwarsa dalam 24 jam.</p>
-				<p>Jika Anda tidak mendaftar, silakan abaikan email ini.</p>
-				<p>Salam,<br>Tim Ihand Lumos</p>
-			</div>
-		</body>
-		</html>
-	`, user.Name, verificationLink, verificationLink)
-
-	// Send email
-	err := mail.To([]string{user.Email}).
-		From(fromName, fromAddress).
-		Subject(subject).
-		Html(body).
-		Send()
-
-	// Log error jika gagal, tapi tidak mengganggu register
 	if err != nil {
-		fmt.Printf("Failed to send verification email to %s: %v\n", user.Email, err)
+		return fmt.Errorf("Gagal mengirim email verifikasi ke %s: %v", user.Email, err)
 	}
+
+	return nil
 }
 
 func (r *AuthController) Login(ctx http.Context) http.Response {
