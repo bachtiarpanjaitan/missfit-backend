@@ -20,5 +20,6 @@ func Migrations() []schema.Migration {
 		&migrations.M20260409093135Ranking{},
 		&migrations.M20260409093439Transaction{},
 		&migrations.M20260511062731AddEducationLevelOnPackage{},
+		&migrations.M20260517150000AddEmailVerificationToUsers{},
 	}
 }
