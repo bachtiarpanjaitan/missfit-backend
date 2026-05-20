@@ -96,4 +96,5 @@ func Web() {
 
 	//ADMIN
 	api.Middleware(middleware.Admin()).Post("/quizzes/import", quizController.ImportQuizzes)
+	api.Middleware(middleware.Admin()).Post("/quizzes/image-upload", quizController.UploadImage)
 }

@@ -6,6 +6,7 @@ import (
 	"lumos/app/models"
 	"lumos/app/services"
 	"lumos/app/utils"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -456,5 +457,60 @@ func (r *QuizController) ImportQuizzes(ctx http.Context) http.Response {
 		"message":            "Berhasil import quiz",
 		"quiz_package_id":    packageId,
 		"imported_questions": importedQuestions,
+	})
+}
+
+func (r *QuizController) UploadImage(ctx http.Context) http.Response {
+	fileObj, err := ctx.Request().File("image")
+	if err != nil {
+		return utils.BadRequest(ctx, "File gambar wajib diupload", nil)
+	}
+
+	ext := strings.ToLower(fileObj.GetClientOriginalExtension())
+	if ext == "" {
+		ext = "jpg"
+	}
+
+	allowedExts := map[string]bool{
+		"jpg":  true,
+		"jpeg": true,
+		"png":  true,
+		"webp": true,
+		"gif":  true,
+	}
+	if !allowedExts[ext] {
+		return utils.BadRequest(ctx, "Format file tidak didukung. Gunakan jpg, jpeg, png, webp, atau gif", nil)
+	}
+
+	fileSize, sizeErr := fileObj.Size()
+	if sizeErr != nil {
+		return utils.InternalServerError(ctx, "Gagal memeriksa ukuran file", sizeErr.Error())
+	}
+	if fileSize > 10*1024*1024 {
+		return utils.BadRequest(ctx, "Ukuran file maksimum 10MB", nil)
+	}
+
+	if err := os.MkdirAll("./public/uploads/quiz", 0755); err != nil {
+		return utils.InternalServerError(ctx, "Gagal menyiapkan direktori upload", err.Error())
+	}
+
+	filename := utils.GenerateId() + "." + ext
+	tmpPath := fileObj.File()
+
+	content, readErr := os.ReadFile(tmpPath)
+	if readErr != nil {
+		return utils.InternalServerError(ctx, "Gagal membaca konten file", readErr.Error())
+	}
+
+	if err := os.WriteFile("./public/uploads/quiz/"+filename, content, 0644); err != nil {
+		return utils.InternalServerError(ctx, "Gagal menyimpan file", err.Error())
+	}
+
+	appUrl := facades.Config().GetString("app.url")
+	imageUrl := appUrl + "/public/uploads/quiz/" + filename
+
+	return ctx.Response().Json(200, map[string]any{
+		"message": "Berhasil mengupload gambar",
+		"url":     imageUrl,
 	})
 }
